@@ -37,6 +37,58 @@ test('通用模型将品质与观测成功率分开，并保留晴空上限', ()
   assert.match(clear.verdict, /爆燃预警/);
 });
 
+test('V3 画布分连续增长并对超过85%的厚云平滑降分', () => {
+  const at40 = calculateSunsetScore('generic', { ...baseWeather, cloudHigh: 40, cloudMid: 40, humidity250: 90 });
+  const at41 = calculateSunsetScore('generic', { ...baseWeather, cloudHigh: 41, cloudMid: 41, humidity250: 90 });
+  const at70 = calculateSunsetScore('generic', { ...baseWeather, cloudHigh: 70, cloudMid: 70, humidity250: 90 });
+  const at85 = calculateSunsetScore('generic', { ...baseWeather, cloudHigh: 85, cloudMid: 85, humidity250: 90 });
+  const at100 = calculateSunsetScore('generic', { ...baseWeather, cloudHigh: 100, cloudMid: 100, humidity250: 90 });
+
+  assert.equal(at40.components.canvasPoints, 32);
+  assert.equal(at41.components.canvasPoints, 33);
+  assert.equal(at70.components.canvasPoints, 56);
+  assert.equal(at85.components.canvasPoints, 68);
+  assert.equal(at100.components.canvasPoints, 32);
+});
+
+test('V3 能见度5km以下不再获得滤镜保底分', () => {
+  const at5 = calculateSunsetScore('generic', { ...baseWeather, visibility: 5, humidity250: 90 });
+  const at10 = calculateSunsetScore('generic', { ...baseWeather, visibility: 10, humidity250: 90 });
+  const at24 = calculateSunsetScore('generic', { ...baseWeather, visibility: 24, humidity250: 90 });
+
+  assert.equal(at5.components.filterPoints, 0);
+  assert.equal(at10.components.filterPoints, 5);
+  assert.equal(at24.components.filterPoints, 20);
+});
+
+test('V3 只使用固定景观加分且正向累计不超过10分', () => {
+  const huangshan = calculateSunsetScore(
+    'huangshan',
+    { ...baseWeather, cloudBaseHeight: 1200 },
+    { cloudLow: 5 }
+  );
+  const shenzhen = calculateSunsetScore(
+    'shenzhen',
+    baseWeather,
+    { cloudLow: 5 },
+    { typhoonNearby: true }
+  );
+
+  assert.equal(huangshan.components.sceneBonus, 8);
+  assert.equal(shenzhen.components.sceneBonus, 10);
+  assert.ok([huangshan, shenzhen].every(result => result.components.sceneBonus <= 10));
+  assert.equal([huangshan, shenzhen].flatMap(result => result.corrections).some(item => /×1\./.test(item.value)), false);
+});
+
+test('V3 同时输出原始物理分与当前展示分', () => {
+  const result = calculateSunsetScore('xihu', baseWeather, { cloudLow: 5 });
+  assert.equal(Number.isInteger(result.rawQuality), true);
+  assert.equal(result.quality, result.rawQuality);
+  assert.equal(result.score, result.quality);
+  assert.equal(result.components.rawQuality, result.rawQuality);
+  assert.equal(result.components.quality, result.quality);
+});
+
 test('等级边界返回 NONE/CLEAR/FAIR/GREAT/FIRE', () => {
   assert.equal(getScoreGrade(0), 'NONE');
   assert.equal(getScoreGrade(1), 'CLEAR');
@@ -64,11 +116,11 @@ test('全站天气统一区分晴、小雨、中雨、大雨与雷雨', () => {
   }
 });
 
-test('西湖高湿惩罚、水面反射与提前15分钟标记', () => {
+test('西湖使用固定水面反射加分与提前15分钟标记', () => {
   const result = calculateSunsetScore('xihu', { ...baseWeather, humidity: 85 }, { cloudLow: 5 });
   assert.equal(result.timeOffsetMinutes, -15);
-  assert.ok(result.corrections.some(item => item.item === '高湿消光'));
   assert.ok(result.corrections.some(item => item.item === '湖面镜像'));
+  assert.equal(result.components.sceneBonus, 2);
 });
 
 test('西湖大雨将质量分与观测成功率归零，微雨只压低成功率', () => {
@@ -153,7 +205,7 @@ test('黄山使用925/700hPa代理识别云海、低云雾与高空风速', () =
     { ...baseWeather, cloudLow: 60, lowLevelHumidity: 96, humidity700: 50 },
     { cloudLow: 5 }
   );
-  assert.ok(cloudSea.baseScore > windy.score);
+  assert.ok(cloudSea.score > windy.score);
   assert.equal(cloudSea.dataAvailability.cloudBaseHeight, 'pressure-level-proxy');
   assert.ok(cloudSea.corrections.some(item => item.item === '压力层云海'));
   assert.equal(fog.probability, 0);

@@ -87,6 +87,8 @@ test('单站数据服务返回三日预测与日落时间', async () => {
   assert.equal(result.sunTimes.sunset, '19:00');
   assert.equal(result.sourceStatus.westernWindow, 'connected');
   assert.equal(typeof result.quality, 'number');
+  assert.equal(typeof result.rawQuality, 'number');
+  assert.equal(result.quality, result.rawQuality);
   assert.equal(typeof result.probability, 'number');
   assert.deepEqual(result.metrics, {
     cloudLow: 8,
@@ -126,7 +128,7 @@ test('成都远程窗口按日落方位角布置在150km外', () => {
 test('jingshan API 别名复用北京景山模型', async () => {
   const result = await getCityPrediction('jingshan', { fetchImpl: createFetch() });
   assert.equal(result.spot, 'beijing');
-  assert.equal(result.source, 'beijing-model-v2');
+  assert.equal(result.source, 'beijing-model-v3');
 });
 
 test('聚合服务返回全部 8 个站点', async () => {
@@ -134,6 +136,7 @@ test('聚合服务返回全部 8 个站点', async () => {
 
   assert.equal(result.spots.length, 8);
   assert.equal(result.spots.every(item => typeof item.quality === 'number'), true);
+  assert.equal(result.spots.every(item => typeof item.rawQuality === 'number'), true);
   assert.equal(result.spots.every(item => typeof item.probability === 'number'), true);
   assert.equal(result.spots.every(item => Number.isFinite(item.metrics?.windowTransparency)), true);
   assert.equal(result.spots.every(item => item.weather?.label === '多云'), true);

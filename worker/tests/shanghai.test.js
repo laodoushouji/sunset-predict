@@ -103,6 +103,7 @@ test('数据服务并行解析三日预报和 WAQI', async () => {
   const result = await getShanghaiPrediction({ fetchImpl: createFetch(), waqiToken: 'test-token' });
 
   assert.equal(result.quality > 0, true);
+  assert.equal(result.rawQuality, result.quality);
   assert.equal(result.forecast.length, 3);
   assert.equal(result.days.length, 3);
   assert.equal(typeof result.probability, 'number');

@@ -104,12 +104,16 @@ function findPredictionInTimeline(timeline, spot, date) {
 
 function predictionSnapshot(prediction) {
   return {
+    rawQuality: Number.isFinite(prediction.rawQuality) ? prediction.rawQuality : prediction.quality,
     quality: prediction.quality,
     probability: prediction.probability,
     grade: prediction.grade,
     weather: prediction.weather || null,
     components: prediction.components || null,
+    inputs: prediction.modelInputs || null,
+    corrections: prediction.corrections || [],
     metrics: prediction.metrics || null,
+    modelVersion: prediction.modelVersion || null,
     source: prediction.source || null,
   };
 }

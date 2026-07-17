@@ -13,7 +13,20 @@ const {
 } = require('../src/services/timeline');
 
 function prediction(spot, dates) {
-  const days = dates.map((date, index) => ({ date, quality: 50 + index, photographyAdvice: `${spot}-${index}` }));
+  const days = dates.map((date, index) => ({
+    spot,
+    date,
+    rawQuality: 50 + index,
+    quality: 50 + index,
+    probability: 60 - index,
+    grade: 'FAIR',
+    metrics: { cloudHigh: 50, cloudMid: 40, visibilityKm: 20 },
+    modelInputs: { cloudHigh: 50, cloudMid: 40, visibilityKm: 20, remoteWindow: { cloudLow: 20 } },
+    components: { canvasPoints: 38, filterPoints: 16, sceneBonus: 0 },
+    corrections: [],
+    photographyAdvice: `${spot}-${index}`,
+    source: `${spot}-model-v3`,
+  }));
   return { spot, days, forecast: days.map(({ date, quality }) => ({ date, quality })) };
 }
 
@@ -60,4 +73,22 @@ test('历史快照跨请求保存，并作为昨天插入时间线', async t => 
   assert.equal(result.days[0].recorded, true);
   assert.equal(savedToday.date, dates[0]);
   assert.equal(savedToday.recorded, true);
+  assert.equal(savedToday.schemaVersion, 2);
+  assert.equal(savedToday.modelVersion, 'quality-v3');
+  assert.equal(savedToday.calibration.xihu.inputs.metrics.cloudHigh, 50);
+  assert.equal(savedToday.calibration.xihu.inputs.model.remoteWindow.cloudLow, 20);
+  assert.equal(savedToday.calibration.xihu.outputs.rawQuality, 50);
+  assert.equal(savedToday.calibration.xihu.outputs.quality, 50);
+  assert.deepEqual(savedToday.calibration.xihu.adjustments, []);
+});
+
+test('旧版历史快照没有校准结构时仍可读取', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sunset-timeline-legacy-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const date = '2026-07-16';
+  await fs.writeFile(path.join(root, `${date}.json`), JSON.stringify({ date, recorded: true }));
+
+  const saved = await loadHistoryDay(root, date);
+  assert.equal(saved.date, date);
+  assert.equal(saved.calibration, undefined);
 });

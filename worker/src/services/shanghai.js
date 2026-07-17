@@ -200,8 +200,8 @@ async function getShanghaiPrediction(options = {}) {
   return {
     ...today,
     days: predictions,
-    forecast: predictions.map(({ date, quality, probability, probabilityLabel, label, color, verdict, weather }) => ({
-      date, quality, probability, probabilityLabel, label, color, verdict, weather,
+    forecast: predictions.map(({ date, rawQuality, quality, probability, probabilityLabel, label, color, verdict, weather }) => ({
+      date, rawQuality, quality, probability, probabilityLabel, label, color, verdict, weather,
     })),
     sourceStatus: data.sourceStatus,
     fetchedAt: data.fetchedAt,

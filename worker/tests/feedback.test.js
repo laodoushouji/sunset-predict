@@ -15,13 +15,16 @@ const {
 const prediction = {
   spot: 'xihu',
   date: '2026-07-17',
+  rawQuality: 68,
   quality: 68,
   probability: 43,
   grade: 'GREAT',
   weather: { label: '晴', kind: 'clear' },
   components: { canvasPoints: 50, filterPoints: 15 },
   metrics: { cloudHigh: 62, cloudLow: 18 },
-  source: 'xihu-model-v2',
+  modelInputs: { cloudHigh: 62, visibilityKm: 24, remoteWindow: { cloudLow: 18 } },
+  modelVersion: 'quality-v3',
+  source: 'xihu-model-v3',
   sunTimes: { sunset: '19:05' },
 };
 
@@ -96,7 +99,10 @@ test('同设备同站点同日期更新同一条匿名真值记录', async t => 
   assert.equal(files.length, 1);
   assert.equal(saved.actualQuality, 95);
   assert.equal(saved.prediction.quality, 68);
+  assert.equal(saved.prediction.rawQuality, 68);
   assert.equal(saved.prediction.probability, 43);
+  assert.equal(saved.prediction.inputs.cloudHigh, 62);
+  assert.equal(saved.prediction.modelVersion, 'quality-v3');
   assert.equal(saved.clientId, undefined);
   assert.equal(saved.ip, undefined);
   assert.match(saved.respondentHash, /^[a-f0-9]{64}$/);

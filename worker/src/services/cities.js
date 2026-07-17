@@ -222,7 +222,8 @@ function predictRegionalSpot(config, weather, westernWeather, context = {}) {
     spot: config.spot,
     spotName: config.spotName,
     location: config.location,
-    quality: model.score,
+    rawQuality: model.rawQuality,
+    quality: model.quality,
     probability: model.probability,
     probabilityLevel: model.probabilityLevel,
     probabilityLabel: model.probabilityLabel,
@@ -255,10 +256,12 @@ function predictRegionalSpot(config, weather, westernWeather, context = {}) {
     photographyAdvice: config.hook,
     corrections: model.corrections,
     components: model.components,
+    modelInputs: model.inputs,
     dataAvailability: model.dataAvailability,
     timeOffsetMinutes: model.timeOffsetMinutes,
     afterglowDecay: model.afterglowDecay,
-    source: `${config.spot}-model-v2`,
+    modelVersion: model.modelVersion,
+    source: `${config.spot}-model-v3`,
   };
 }
 
@@ -301,8 +304,8 @@ async function getCityPrediction(slug, options = {}) {
     target: config.target,
     window: windowPoint,
     days: predictions,
-    forecast: predictions.map(({ date, quality, probability, probabilityLabel, label, color, verdict, weather }) => ({
-      date, quality, probability, probabilityLabel, label, color, verdict, weather,
+    forecast: predictions.map(({ date, rawQuality, quality, probability, probabilityLabel, label, color, verdict, weather }) => ({
+      date, rawQuality, quality, probability, probabilityLabel, label, color, verdict, weather,
     })),
     sourceStatus: {
       openMeteo: 'connected',
@@ -316,7 +319,7 @@ async function getCityPrediction(slug, options = {}) {
       typhoonTrack: ['xiamen', 'shenzhen'].includes(config.spot) ? 'unavailable' : 'not-required',
     },
     fetchedAt: new Date().toISOString(),
-    statusText: `实时预测 · ${config.spot}-model-v2`,
+    statusText: `实时预测 · ${config.spot}-model-v3`,
   };
 }
 

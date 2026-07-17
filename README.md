@@ -22,6 +22,9 @@ cp worker/.dev.vars.example .env
 # 按需填写 WAQI_TOKEN，禁止提交真实 Token
 
 # 启动完整前后端
+set -a
+source .env
+set +a
 PORT=3001 APP_ROOT="$PWD" node worker/src/server.mjs
 ```
 

@@ -32,11 +32,55 @@ function historyFile(root, date) {
   return path.join(root, `${date}.json`);
 }
 
+function calibrationEntry(prediction) {
+  if (!prediction || prediction.error) return null;
+  return {
+    spot: prediction.spot,
+    date: prediction.date,
+    modelVersion: prediction.modelVersion || 'legacy',
+    source: prediction.source || null,
+    inputs: {
+      model: prediction.modelInputs || null,
+      metrics: prediction.metrics || null,
+      weather: prediction.weather || null,
+      windows: prediction.windows || null,
+      airQuality: prediction.airQuality || null,
+      sunTimes: prediction.sunTimes || null,
+    },
+    adjustments: prediction.corrections || [],
+    components: prediction.components || null,
+    outputs: {
+      rawQuality: Number.isFinite(prediction.rawQuality) ? prediction.rawQuality : prediction.quality,
+      quality: prediction.quality,
+      probability: prediction.probability,
+      grade: prediction.grade || null,
+      probabilityLevel: prediction.probabilityLevel || null,
+    },
+  };
+}
+
+function buildCalibrationSnapshot(day) {
+  return {
+    xihu: calibrationEntry(day.xihu),
+    waitan: calibrationEntry(day.waitan),
+    spots: Object.fromEntries((day.spots || [])
+      .map(prediction => [prediction.spot, calibrationEntry(prediction)])),
+  };
+}
+
 async function saveHistoryDay(root, day) {
   await fs.mkdir(root, { recursive: true, mode: 0o750 });
   const file = historyFile(root, day.date);
   const temporary = `${file}.${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`;
-  await fs.writeFile(temporary, JSON.stringify({ ...day, offset: -1, recorded: true }), { mode: 0o640 });
+  const snapshot = {
+    ...day,
+    schemaVersion: 2,
+    modelVersion: 'quality-v3',
+    calibration: buildCalibrationSnapshot(day),
+    offset: -1,
+    recorded: true,
+  };
+  await fs.writeFile(temporary, JSON.stringify(snapshot), { mode: 0o640 });
   await fs.rename(temporary, file);
 }
 
@@ -69,6 +113,8 @@ async function buildTimeline(xihu, waitan, regional, historyRoot) {
 module.exports = {
   addDays,
   buildLiveDays,
+  buildCalibrationSnapshot,
+  calibrationEntry,
   buildTimeline,
   loadHistoryDay,
   saveHistoryDay,

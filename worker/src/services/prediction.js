@@ -8,18 +8,18 @@
 // ============================================
 
 const SCORE_PLUGIN_CONFIG = {
-  generic: { visibilityFullKm: 24, visibilityWeight: 0.15 },
-  xihu: { visibilityFullKm: 24, visibilityWeight: 0.15 },
-  waitan: { visibilityFullKm: 24, visibilityWeight: 0.15 },
-  beijing: { visibilityFullKm: 24, visibilityWeight: 0.25 },
-  jingshan: { visibilityFullKm: 24, visibilityWeight: 0.25 },
-  erhai: { visibilityFullKm: 24, visibilityWeight: 0.15 },
-  huangshan: { visibilityFullKm: 24, visibilityWeight: 0.15 },
-  chongqing: { visibilityFullKm: 15, visibilityWeight: 0.15 },
-  xiamen: { visibilityFullKm: 24, visibilityWeight: 0.15 },
-  qingdao: { visibilityFullKm: 24, visibilityWeight: 0.15 },
-  chengdu: { visibilityFullKm: 12, visibilityWeight: 0.15 },
-  shenzhen: { visibilityFullKm: 24, visibilityWeight: 0.15 },
+  generic: { visibilityFullKm: 24 },
+  xihu: { visibilityFullKm: 24 },
+  waitan: { visibilityFullKm: 24 },
+  beijing: { visibilityFullKm: 24 },
+  jingshan: { visibilityFullKm: 24 },
+  erhai: { visibilityFullKm: 24 },
+  huangshan: { visibilityFullKm: 24 },
+  chongqing: { visibilityFullKm: 15 },
+  xiamen: { visibilityFullKm: 24 },
+  qingdao: { visibilityFullKm: 24 },
+  chengdu: { visibilityFullKm: 12 },
+  shenzhen: { visibilityFullKm: 24 },
 };
 
 function clamp(value, min = 0, max = 100) {
@@ -27,9 +27,9 @@ function clamp(value, min = 0, max = 100) {
 }
 
 function normalizeVisibility(visibility, fullScoreKm = 24) {
-  if (!Number.isFinite(visibility) || visibility <= 5) return 0.5;
+  if (!Number.isFinite(visibility) || visibility <= 5) return 0;
   if (visibility >= fullScoreKm) return 1;
-  return 0.5 + ((visibility - 5) / (fullScoreKm - 5)) * 0.5;
+  return (visibility - 5) / (fullScoreKm - 5);
 }
 
 function isSoutheastWind(direction) {
@@ -117,7 +117,7 @@ function getProbabilityMeta(probability) {
 
 function getVerdict(score, probability) {
   const highQuality = score >= 60;
-  const highProbability = probability >= 70;
+  const highProbability = probability >= 60;
   if (highQuality && highProbability) {
     return '【爆燃预警】今晚具备高质量晚霞条件，且西方窗口通透，建议提前出发。';
   }
@@ -131,9 +131,14 @@ function getVerdict(score, probability) {
 }
 
 function canvasPoints(coverage) {
-  if (coverage < 40) return coverage * 2;
-  if (coverage <= 70) return 80;
-  return Math.max(8, 80 - ((coverage - 70) / 30) * 72);
+  const base = clamp(coverage) * 0.8;
+  if (coverage <= 85) return base;
+  const thicknessFactor = Math.max(0.4, 1 - 0.6 * ((coverage - 85) / 15));
+  return base * thicknessFactor;
+}
+
+function calibrateQuality(rawQuality) {
+  return Math.round(clamp(rawQuality));
 }
 
 function windowProbability(cloudLow) {
@@ -169,6 +174,22 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
   let colorOverride = null;
   let probabilityMultiplier = 1;
   let probabilityCap = 100;
+  let score = 0;
+  let sceneBonus = 0;
+  let qualityAdjustment = 0;
+
+  const addSceneBonus = (requested, item, desc) => {
+    const awarded = Math.max(0, Math.min(requested, 10 - sceneBonus));
+    if (awarded <= 0) return;
+    sceneBonus += awarded;
+    score += awarded;
+    corrections.push({ item, value: `+${awarded}`, desc });
+  };
+  const adjustQuality = (points, item, desc) => {
+    qualityAdjustment += points;
+    score += points;
+    corrections.push({ item, value: points > 0 ? `+${points}` : String(points), desc });
+  };
 
   if (normalizedSpotId === 'qingdao' && isSoutheastWind(weather.windDirection)) {
     effectiveVisibility *= 0.85;
@@ -176,8 +197,7 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
   }
 
   const canvasCoverage = clamp((weather.cloudHigh || 0) * 0.7 + (weather.cloudMid || 0) * 0.3);
-  const filterMax = normalizedSpotId === 'beijing' ? 25 : 20;
-  const canvas = canvasPoints(canvasCoverage) * ((100 - filterMax) / 80);
+  const canvas = canvasPoints(canvasCoverage);
   if (Number.isFinite(remoteWeather?.cloudLow)) {
     dataAvailability.remoteWindow = 'connected';
     if (remoteWeather.cloudLow > 20) corrections.push({
@@ -190,15 +210,15 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
   }
 
   const visibilityNorm = normalizeVisibility(effectiveVisibility, config.visibilityFullKm);
-  let filter = filterMax * visibilityNorm;
+  let filter = 20 * visibilityNorm;
   if (weather.humidity250 >= 70 && weather.humidity250 <= 85) {
-    filter = Math.min(filterMax, filter * 1.05);
-    corrections.push({ item: '薄卷云滤镜', value: '+5%', desc: `250hPa 湿度${weather.humidity250}%，利于细腻着色` });
+    filter = Math.min(20, filter + 1);
+    corrections.push({ item: '薄卷云滤镜', value: '+1', desc: `250hPa 湿度${weather.humidity250}%，利于细腻着色` });
   } else if (weather.humidity250 > 95) {
     filter = Math.max(0, filter - 5);
     corrections.push({ item: '高空厚云', value: '-5', desc: `250hPa 湿度${weather.humidity250}%，高云可能偏厚` });
   }
-  let score = canvas + filter;
+  score = canvas + filter;
 
   const lowLevelHumidity = weather.lowLevelHumidity ?? weather.humidity;
   let localObservation = 100 - clamp(weather.cloudLow || 0);
@@ -214,12 +234,7 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
   let probability = remoteWindow * 0.8 + localObservation * 0.2;
 
   if (normalizedSpotId === 'xihu') {
-    if (weather.humidity > 80) {
-      score *= 0.9;
-      corrections.push({ item: '高湿消光', value: '×0.9', desc: `湿度${weather.humidity}%，水汽削弱色彩` });
-    }
-    score *= 1.05;
-    corrections.push({ item: '湖面镜像', value: '×1.05', desc: '西湖水面提供反射加成' });
+    addSceneBonus(2, '湖面镜像', '西湖水面提供固定反射加成');
   }
 
   if (normalizedSpotId === 'waitan') {
@@ -227,18 +242,17 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
       probability = Math.max(probability, 92);
       corrections.push({ item: '150km 远程破窗', value: '几率 ≥92%', desc: '苏州/无锡/常州方向低云少，进光路径通透' });
     }
-    if (context.airQuality?.aqi >= 50 && context.airQuality.aqi <= 100) {
-      score += 5;
+    if (context.airQuality?.aqi >= 30 && context.airQuality.aqi <= 80) {
+      adjustQuality(2, '气溶胶散射', `AQI ${context.airQuality.aqi}，适量颗粒物增强粉紫散射`);
       colorOverride = { label: '赛博粉紫', hint: 'purple', desc: '适量颗粒物增强粉紫散射' };
-      corrections.push({ item: '气溶胶散射', value: '+5', desc: `AQI ${context.airQuality.aqi}，锁定粉紫色倾向` });
+    } else if (context.airQuality?.aqi > 120) {
+      adjustQuality(-3, '空气污染消光', `AQI ${context.airQuality.aqi}，灰霾削弱色彩与对比度`);
     }
     if (weather.visibility > 30) {
-      score += 10;
-      corrections.push({ item: '陆家嘴金光', value: '+10', desc: '能见度超过30km，玻璃幕墙反射条件优秀' });
+      addSceneBonus(2, '陆家嘴金光', '能见度超过30km，建筑与浦江反射条件优秀');
     }
     if (remoteWeather?.humidity850 > 95) {
-      score -= 15;
-      corrections.push({ item: '850hPa 高湿', value: '-15', desc: `远程窗口湿度${remoteWeather.humidity850}%，灰霾消光风险高` });
+      adjustQuality(-3, '850hPa 高湿', `远程窗口湿度${remoteWeather.humidity850}%，灰霾消光风险高`);
     }
   }
 
@@ -248,9 +262,8 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
       corrections.push({ item: '门头沟山云', value: '几率 ≤20%', desc: '正西山云超过40%，紫禁城进光受阻' });
     }
     if (weather.humidity < 30) {
-      score += 5;
+      addSceneBonus(3, '北方干燥', `湿度${weather.humidity}%，色彩倾向金橙`);
       colorOverride = { label: '通透金橙', hint: 'gold', desc: '北方干燥空气增强金橙色直射光' };
-      corrections.push({ item: '北方干燥', value: '+5', desc: `湿度${weather.humidity}%，色彩倾向金橙` });
     }
   }
 
@@ -259,9 +272,8 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
       probabilityCap = 10;
       corrections.push({ item: '苍山近程阻断', value: '几率 ≤10%', desc: '15km 苍山窗口低云超过60%' });
     }
-    score *= 1.15;
+    addSceneBonus(4, '高海拔补偿', '洱海高海拔增强色彩饱和度');
     colorOverride = { label: '干热深红', hint: 'deep-red', desc: '高海拔紫外线与低水汽增强深红饱和度' };
-    corrections.push({ item: '高海拔补偿', value: '×1.15', desc: '洱海高海拔增强色彩饱和度' });
   }
 
   if (normalizedSpotId === 'huangshan') {
@@ -274,20 +286,18 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
 
     if (hasCloudBaseHeight) {
       if (weather.cloudBaseHeight >= 1000 && weather.cloudBaseHeight <= 1500) {
-        score = Math.min(100, score * 1.5);
-        corrections.push({ item: '云海日落', value: '×1.5', desc: `云底高度${weather.cloudBaseHeight}m，处于理想云海区间` });
+        addSceneBonus(8, '云海日落', `云底高度${weather.cloudBaseHeight}m，处于理想云海区间`);
       } else if (weather.cloudBaseHeight > 1600) {
         probabilityCap = 0;
         corrections.push({ item: '身在雾中', value: '几率 0%', desc: `云底高度${weather.cloudBaseHeight}m，高于1600m` });
       }
     } else if (hasPressureLevelProxy) {
       if (weather.lowLevelHumidity > 95 && weather.humidity700 < 30) {
-        score = Math.min(100, score * 1.5);
-        corrections.push({
-          item: '压力层云海',
-          value: '×1.5',
-          desc: `925hPa 湿度${weather.lowLevelHumidity}%，700hPa 湿度${weather.humidity700}%，低空饱和且高空干燥`,
-        });
+        addSceneBonus(
+          8,
+          '压力层云海',
+          `925hPa 湿度${weather.lowLevelHumidity}%，700hPa 湿度${weather.humidity700}%，低空饱和且高空干燥`
+        );
       } else if (weather.lowLevelHumidity > 95 && weather.cloudLow >= 50) {
         probabilityCap = 0;
         corrections.push({
@@ -298,8 +308,7 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
       }
     }
     if (weather.windSpeed700 > 12) {
-      score *= 0.8;
-      corrections.push({ item: '高空风速过强', value: '×0.8', desc: `700hPa 风速${weather.windSpeed700}m/s，晚霞稳定性下降` });
+      adjustQuality(-4, '高空风速过强', `700hPa 风速${weather.windSpeed700}m/s，晚霞稳定性下降`);
     }
   }
 
@@ -308,8 +317,7 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
       probabilityMultiplier *= 0.7;
       corrections.push({ item: '雾都高湿消光', value: '几率 ×0.7', desc: `湿度${weather.humidity}%，雾气吸收颜色` });
     }
-    score += 5;
-    corrections.push({ item: '两江反射', value: '+5', desc: '两江交汇水面提供倒影加成' });
+    addSceneBonus(2, '两江反射', '两江交汇水面提供固定倒影加成');
   }
 
   if (normalizedSpotId === 'xiamen') {
@@ -322,9 +330,8 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
       corrections.push({ item: '海雾', value: '灰蒙蒙', desc: `低层湿度${weather.lowLevelHumidity}%，色彩被海雾削弱` });
     }
     if (context.typhoonNearby === true && weather.pressureTrend24h > 0) {
-      score += 20;
+      addSceneBonus(8, '台风外围下沉气流', '台风路径接近且24小时气压回升');
       probability += 10;
-      corrections.push({ item: '台风外围下沉气流', value: '+20', desc: '台风路径接近且24小时气压回升' });
     }
   }
 
@@ -347,14 +354,12 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
     dataAvailability.pressureTrend24h = Number.isFinite(weather.pressureTrend24h) ? 'connected' : 'unavailable';
     dataAvailability.typhoonTrack = typeof context.typhoonNearby === 'boolean' ? 'connected' : 'unavailable';
     if (remoteWeather?.cloudLow <= 20) {
-      score *= 1.1;
+      addSceneBonus(3, '建筑金光', '日落方向通透，深圳湾摩天楼具备反光条件');
       probability = Math.max(probability, 90);
-      corrections.push({ item: '建筑金光', value: '×1.1', desc: '日落方向通透，深圳湾摩天楼具备反光条件' });
     }
     if (context.typhoonNearby === true && weather.pressureTrend24h > 0 && weather.visibility >= config.visibilityFullKm) {
-      score += 25;
+      addSceneBonus(8, '台风外围下沉气流', '台风路径接近、气压回升且极度通透');
       probability += 10;
-      corrections.push({ item: '台风外围下沉气流', value: '+25', desc: '台风路径接近、气压回升且极度通透' });
     }
     if (isSoutheastWind(weather.windDirection) && weather.humidity > 90) {
       probabilityMultiplier *= 0.6;
@@ -391,18 +396,31 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
 
   if (Number.isFinite(remoteWeather?.cloudLow) && remoteWeather.cloudLow > 80) probabilityCap = Math.min(probabilityCap, 9);
   probability = Math.round(clamp(Math.min(probability * probabilityMultiplier, probabilityCap)));
-  const finalScore = Math.round(clamp(score));
+  const rawQuality = Math.round(clamp(score));
+  const quality = calibrateQuality(rawQuality);
   const probabilityMeta = getProbabilityMeta(probability);
+  const thicknessFactor = canvasCoverage <= 85
+    ? 1
+    : Math.max(0.4, 1 - 0.6 * ((canvasCoverage - 85) / 15));
   return {
-    score: finalScore,
+    score: quality,
+    rawQuality,
+    quality,
     probability,
     probabilityLevel: probabilityMeta.level,
     probabilityLabel: probabilityMeta.label,
-    verdict: getVerdict(finalScore, probability),
-    grade: getScoreGrade(finalScore),
+    verdict: getVerdict(quality, probability),
+    grade: getScoreGrade(quality),
     baseScore: Math.round(canvas + filter),
     components: {
       canvasCoverage: Math.round(canvasCoverage),
+      canvasPoints: Math.round(canvas),
+      thicknessFactor: Math.round(thicknessFactor * 100) / 100,
+      filterPoints: Math.round(filter),
+      sceneBonus,
+      qualityAdjustment,
+      rawQuality,
+      quality,
       canvas: Math.round(canvas),
       filter: Math.round(filter),
       visibility: Math.round(visibilityNorm * 100),
@@ -410,9 +428,32 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
       localObservation: Math.round(localObservation),
     },
     weather: weatherMeta,
+    inputs: {
+      cloudHigh: weather.cloudHigh,
+      cloudMid: weather.cloudMid,
+      cloudLow: weather.cloudLow,
+      visibilityKm: weather.visibility,
+      effectiveVisibilityKm: Math.round(effectiveVisibility * 10) / 10,
+      humidity: weather.humidity,
+      humidity925: weather.lowLevelHumidity,
+      humidity700: weather.humidity700,
+      humidity250: weather.humidity250,
+      windSpeed700: weather.windSpeed700,
+      windDirection: weather.windDirection,
+      pressureTrend24h: weather.pressureTrend24h,
+      precipitationRateMmH: weatherMeta.precipitationRateMmH,
+      precipitationProbability: weatherMeta.precipitationProbability,
+      weatherCode: weatherMeta.weatherCode,
+      remoteWindow: remoteWeather ? {
+        cloudLow: remoteWeather.cloudLow,
+        visibilityKm: remoteWeather.visibility,
+        humidity850: remoteWeather.humidity850,
+      } : null,
+    },
     colorOverride,
     corrections,
     dataAvailability,
+    modelVersion: 'quality-v3',
     timeOffsetMinutes: normalizedSpotId === 'xihu' ? -15 : 0,
     afterglowDecay: normalizedSpotId === 'qingdao' && weather.cloudHigh > 60 ? 'slow' : 'normal',
   };
@@ -504,7 +545,8 @@ function predictXihu(xihuWeather, windowWeathers, airQuality = {}) {
     : { available: false, desc: '' };
 
   return {
-    quality: model.score,
+    rawQuality: model.rawQuality,
+    quality: model.quality,
     probability: model.probability,
     probabilityLevel: model.probabilityLevel,
     probabilityLabel: model.probabilityLabel,
@@ -519,6 +561,7 @@ function predictXihu(xihuWeather, windowWeathers, airQuality = {}) {
     bestSpot,
     corrections: model.corrections,
     components: model.components,
+    modelInputs: model.inputs,
     dataAvailability: model.dataAvailability,
     timeOffsetMinutes: model.timeOffsetMinutes,
     airQuality: {
@@ -526,7 +569,8 @@ function predictXihu(xihuWeather, windowWeathers, airQuality = {}) {
       aqi: Number.isFinite(Number(airQuality.aqi)) ? Number(airQuality.aqi) : null,
       pm25: Number.isFinite(Number(airQuality.pm25)) ? Number(airQuality.pm25) : null,
     },
-    source: 'xihu-model-v2',
+    modelVersion: model.modelVersion,
+    source: 'xihu-model-v3',
   };
 }
 
@@ -591,7 +635,8 @@ function predictWaitan(waitanWeather, windowWeathers = {}, airQuality = {}) {
     spot: WAITAN_CONFIG.spot,
     spotName: WAITAN_CONFIG.name,
     location: WAITAN_CONFIG.location,
-    quality: model.score,
+    rawQuality: model.rawQuality,
+    quality: model.quality,
     probability: model.probability,
     probabilityLevel: model.probabilityLevel,
     probabilityLabel: model.probabilityLabel,
@@ -633,13 +678,15 @@ function predictWaitan(waitanWeather, windowWeathers = {}, airQuality = {}) {
     photographyAdvice: `今日建议等到 ${shootingTime}，利用晚霞余晖拍摄蓝调时刻与外滩亮灯瞬间。`,
     corrections: model.corrections,
     components: model.components,
+    modelInputs: model.inputs,
     dataAvailability: model.dataAvailability,
     airQuality: {
       available: airQuality.available !== false,
       aqi: Number.isFinite(Number(airQuality.aqi)) ? Number(airQuality.aqi) : null,
       pm25: Number.isFinite(Number(airQuality.pm25)) ? Number(airQuality.pm25) : null,
     },
-    source: 'waitan-model-v3',
+    modelVersion: model.modelVersion,
+    source: 'waitan-model-v4',
   };
 }
 
@@ -780,5 +827,6 @@ if (typeof module !== 'undefined') {
     getScoreGrade,
     getWeatherMeta,
     normalizeVisibility,
+    calibrateQuality,
   };
 }
