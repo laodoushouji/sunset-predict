@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#070b14">
+  <meta name="description" content="专业提供杭州西湖、上海外滩等热门景区晚霞、火烧云精准预测。结合 250hPa 高空湿度与格点气象算法，为摄影师提供机位建议与参数指导。">
+  <meta name="keywords" content="晚霞预测, 火烧云预报, 西湖摄影, 外滩日落, 摄影机位, 杭州天气">
+  <title>晚霞预测 - 今日火烧云概率与摄影指南 | Sunset Predict</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@500;600&amp;display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/styles.css?v=20260717-feedback-v20">
+</head>
+
+<body>
+  <div class="ambient" aria-hidden="true">
+    <div class="ambient__grain"></div>
+  </div>
+
+  <main class="page-shell">
+    <header class="site-header">
+      <div>
+        <div class="brand-mark">
+          <span class="brand-mark__icon" aria-hidden="true">
+            <i data-lucide="sunset" class="h-4 w-4" aria-hidden="true"></i>
+          </span>
+          <span>Sunset Predict · Cloud</span>
+        </div>
+
+        <p class="site-title">
+          <span id="hero-day-title">今天的天空，</span>
+          <span class="sunset-text">值得等一场。</span>
+        </p>
+        <p class="site-subtitle">
+          结合云层、能见度与西方光路，为晚霞摄影提供更安静、更明确的出发判断。
+        </p>
+      </div>
+
+      <div class="live-badge" id="live-badge" aria-label="数据实时更新中">
+        <span class="live-badge__dot" aria-hidden="true"></span>
+        <span>LIVE FORECAST</span>
+      </div>
+    </header>
+
+    <!-- 双列流：西湖预测卡片 + 外滩数据接入卡片 -->
+    <section class="card-grid grid grid-cols-2 gap-4 sm:gap-6" aria-label="景区晚霞预测">
+      <article
+        class="card card--active"
+        id="card-xihu"
+        role="button"
+        tabindex="0"
+        aria-expanded="false"
+        aria-controls="detail-panel"
+        aria-label="西湖今日晚霞预报，点击展开摄影指南"
+      >
+        <div class="card__bg" aria-hidden="true">
+          <img
+            class="card__img"
+            src="assets/xihu-sunset.webp"
+            alt="杭州西湖湖面与群山映照晚霞的摄影景观"
+            width="1600"
+            height="900"
+            fetchpriority="high"
+          >
+          <div class="card__veil"></div>
+        </div>
+
+        <div class="card__content">
+          <div class="card__topline">
+            <div>
+              <p class="card__city">杭州 · Hangzhou</p>
+              <h2 class="card__location">西湖</h2>
+            </div>
+            <span class="card__status weather-badge unknown" id="xihu-day-status">天气更新中</span>
+          </div>
+
+          <div class="card__score-area">
+            <h1 class="score" aria-label="西湖今日晚霞质量分数">
+              <span class="score__number" id="score-value">--</span>
+              <span class="score__unit">/ 100</span>
+            </h1>
+
+            <div class="card__grade-row">
+              <span class="grade-chip" id="grade-tag">计算中</span>
+            </div>
+
+            <div class="probability-pill" id="xihu-probability">
+              <i data-lucide="shield" aria-hidden="true"></i>
+              <span>观测成功率 --%</span>
+            </div>
+
+            <div class="progress" id="progress-bar" aria-label="晚霞质量进度">
+              <div class="progress__fill" id="progress-fill"></div>
+              <div class="progress__glow" id="progress-glow" aria-hidden="true"></div>
+            </div>
+
+            <div class="card__footer">
+              <span class="card__updated">更新于 <span id="update-time">--:--</span></span>
+              <span class="card__expand-hint" id="expand-hint">
+                <span>摄影指南</span>
+                <i data-lucide="chevron-down" class="h-4 w-4" aria-hidden="true"></i>
+              </span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article
+        class="card card--preview"
+        id="card-bund"
+        role="button"
+        tabindex="0"
+        aria-expanded="false"
+        aria-controls="detail-panel"
+        aria-label="上海外滩预测已解锁，数据正在接入"
+      >
+        <div class="card__bg" aria-hidden="true">
+          <img
+            class="card__img"
+            src="assets/waitan-sunset.webp"
+            alt="上海外滩建筑群与黄浦江映照橙色晚霞的摄影景观"
+            width="1600"
+            height="900"
+            loading="lazy"
+          >
+          <div class="card__veil"></div>
+        </div>
+
+        <div class="card__preview">
+          <div class="card__topline">
+            <div>
+              <p class="card__city">上海 · Shanghai</p>
+              <h2 class="card__location">外滩</h2>
+            </div>
+            <span class="card__status weather-badge unknown" id="waitan-weather">天气更新中</span>
+          </div>
+          <div class="card__preview-score" aria-label="外滩晚霞预测分数">
+            <div class="card__preview-number">
+              <span id="waitan-score-value">--</span>
+              <small>/ 100</small>
+            </div>
+            <span class="card__preview-grade" id="waitan-grade">等待实时评分</span>
+            <div class="probability-pill" id="waitan-probability">
+              <i data-lucide="shield" aria-hidden="true"></i>
+              <span>观测成功率 --%</span>
+            </div>
+            <div class="card__preview-progress" aria-hidden="true">
+              <span id="waitan-progress-fill"></span>
+            </div>
+          </div>
+          <div class="card__preview-bottom">
+            <p class="card__preview-note">上海站 · Beta</p>
+          </div>
+        </div>
+      </article>
+
+      <button class="detail-overlay" id="detail-overlay" type="button" aria-label="关闭摄影指南" aria-hidden="true" tabindex="-1"></button>
+
+      <section
+        class="detail glass-panel"
+        id="detail-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-hidden="true"
+        aria-labelledby="guide-title"
+        tabindex="-1"
+        inert
+      >
+        <div class="detail__inner">
+          <div class="detail__drag-zone" id="detail-drag-zone" aria-label="向下滑动关闭">
+            <span class="detail__handle" aria-hidden="true"></span>
+            <div class="detail__heading">
+              <div>
+                <span class="detail__eyebrow" id="guide-eyebrow">Photography guide</span>
+                <h2 class="detail__title" id="guide-title">今天的摄影指南</h2>
+              </div>
+              <button class="detail__close" id="detail-close" type="button" aria-label="关闭摄影指南">
+                <i data-lucide="x" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="detail__scroll" id="detail-scroll">
+            <section class="detail-hero" aria-label="核心摄影建议">
+              <div class="detail-hero__score">
+                <span class="detail-hero__number" id="sheet-score">--</span>
+                <span class="detail-hero__unit">/ 100</span>
+                <span class="detail-hero__grade" id="sheet-grade">计算中</span>
+              </div>
+              <div class="detail-hero__advice">
+                <span class="detail__label">建议机位</span>
+                <strong id="best-spot">--</strong>
+                <span class="detail-hero__meta"><span id="sunset-time">--</span> 日落 · 建议提前 35 分钟到达</span>
+              </div>
+              <div class="camera-params" aria-label="建议相机参数">
+                <div><span>光圈</span><strong id="camera-aperture">f/8</strong></div>
+                <div><span>快门</span><strong id="camera-shutter">1/15s</strong></div>
+                <div><span>ISO</span><strong id="camera-iso">100</strong></div>
+                <div><span>白平衡</span><strong id="camera-wb">5600K</strong></div>
+              </div>
+            </section>
+
+            <div class="detail__chips" id="corrections" aria-label="预测修正因素"></div>
+            <div class="detail__alpenglow" id="alpenglow-hint"></div>
+
+            <section class="detail-section" aria-labelledby="physics-title">
+              <span class="detail__eyebrow">Physical layers</span>
+              <h3 class="detail-section__title" id="physics-title">物理层拆解</h3>
+
+              <div class="cloud-chart" aria-label="低云、中云和高云量图表">
+                <div class="cloud-chart__row">
+                  <span>高云</span><div><i id="cloud-high-fill"></i></div><strong id="cloud-high-value">--%</strong>
+                </div>
+                <div class="cloud-chart__row">
+                  <span>中云</span><div><i id="cloud-mid-fill"></i></div><strong id="cloud-mid-value">--%</strong>
+                </div>
+                <div class="cloud-chart__row">
+                  <span>低云</span><div><i id="cloud-low-fill"></i></div><strong id="cloud-low-value">--%</strong>
+                </div>
+              </div>
+
+              <div class="physics-grid">
+                <div class="physics-card">
+                  <span>画布 Canvas</span><strong id="metric-high-cloud">--%</strong>
+                  <div><i id="metric-high-cloud-fill"></i></div>
+                </div>
+                <div class="physics-card">
+                  <span>滤镜 Filter</span><strong id="metric-visibility">-- km</strong>
+                  <div><i id="metric-visibility-fill"></i></div>
+                </div>
+                <div class="physics-card">
+                  <span>光源 Light Path</span><strong id="metric-window">--%</strong>
+                  <div><i id="metric-window-fill"></i></div>
+                </div>
+              </div>
+
+              <div class="detail__grid">
+                <div class="detail__item">
+                  <span class="detail__label">天气状况</span>
+                  <span class="detail__value" id="weather-condition">--</span>
+                </div>
+                <div class="detail__item">
+                  <span class="detail__label">降水信息</span>
+                  <span class="detail__value" id="weather-precipitation">--</span>
+                </div>
+                <div class="detail__item">
+                  <span class="detail__label">色彩倾向</span>
+                  <span class="detail__value" id="color-desc">--</span>
+                </div>
+                <div class="detail__item">
+                  <span class="detail__label">预测置信度</span>
+                  <span class="detail__value" id="confidence">--</span>
+                </div>
+              </div>
+
+              <div class="algorithm-commentary">
+                <span>算法深度点评</span>
+                <p id="algorithm-commentary">正在拆解高空画布与西方进光路径。</p>
+              </div>
+            </section>
+
+            <section class="detail-section author-note" aria-labelledby="author-note-title">
+              <span class="detail__eyebrow">A note from the maker</span>
+              <h3 class="detail-section__title" id="author-note-title">作者碎碎念</h3>
+              <p id="author-note">模型正在整理今天的光路。</p>
+            </section>
+
+            <section class="detail-section observation-feedback" aria-labelledby="feedback-title">
+              <span class="detail__eyebrow">Ground truth</span>
+              <h3 class="detail-section__title" id="feedback-title">今晚是否看到？</h3>
+              <p class="observation-feedback__intro">告诉模型真实结果。你的反馈会与当天预测绑定，用于校准晚霞质量与观测成功率。</p>
+
+              <div class="observation-feedback__choices" aria-label="是否看到晚霞">
+                <button class="feedback-choice" type="button" data-feedback-observed="true">
+                  <i data-lucide="eye" aria-hidden="true"></i>
+                  看到了
+                </button>
+                <button class="feedback-choice" type="button" data-feedback-observed="false">
+                  <i data-lucide="eye-off" aria-hidden="true"></i>
+                  没看到
+                </button>
+              </div>
+
+              <div class="observation-feedback__quality" id="feedback-quality" hidden>
+                <span>实际质量</span>
+                <div class="feedback-quality-grid">
+                  <button type="button" data-feedback-quality="20">平淡</button>
+                  <button type="button" data-feedback-quality="40">微霞</button>
+                  <button type="button" data-feedback-quality="60">不错</button>
+                  <button type="button" data-feedback-quality="80">很棒</button>
+                  <button type="button" data-feedback-quality="95">爆燃</button>
+                </div>
+              </div>
+
+              <button class="feedback-submit" id="feedback-submit" type="button" disabled>提交实况</button>
+              <p class="observation-feedback__status" id="feedback-status" role="status" aria-live="polite">日落后开放反馈。</p>
+              <p class="observation-feedback__privacy">匿名记录，反馈数据不包含 IP 或个人信息。</p>
+            </section>
+
+            <div class="detail-section" aria-label="本地商业合作">
+              <button class="partner-card" id="partner-card-open" type="button" aria-haspopup="dialog" aria-controls="partner-modal">
+                <img class="partner-card__image" id="partner-card-image" src="assets/xihu-sunset.webp" alt="西湖晚霞与本地商业合作展示图" width="50" height="50">
+                <span class="partner-card__copy">
+                  <strong id="partner-card-title">一起做点与晚霞有关的事</strong>
+                  <small id="partner-card-description">寻找本地合作伙伴：咖啡/酒店/摄影。</small>
+                </span>
+                <span class="partner-card__badge" id="partner-card-badge">Partner</span>
+                <i data-lucide="chevron-right" class="partner-card__arrow" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <nav class="day-switcher glass-panel" id="day-switcher" aria-label="切换预测日期">
+      <button class="day-switcher__button" id="day-previous" type="button" aria-label="查看前一天">
+        <i data-lucide="chevron-left" aria-hidden="true"></i>
+      </button>
+      <div class="day-switcher__date" aria-live="polite">
+        <span class="day-switcher__eyebrow" id="day-state">实时预测</span>
+        <strong id="day-label">今天</strong>
+        <small id="day-date">--月--日</small>
+      </div>
+      <button class="day-switcher__button" id="day-next" type="button" aria-label="查看后一天">
+        <i data-lucide="chevron-right" aria-hidden="true"></i>
+      </button>
+      <span class="day-switcher__hint">向右滑看未来 · 向左滑看过去</span>
+    </nav>
+
+    <section class="regional" aria-labelledby="regional-title">
+      <div class="regional__heading">
+        <div>
+          <span class="regional__eyebrow">National photography spots</span>
+          <h2 class="regional__title" id="regional-title">全国摄影站</h2>
+        </div>
+        <span class="regional__note">8 个站点 · 实时试运行</span>
+      </div>
+      <div class="city-grid" id="regional-grid" aria-live="polite"></div>
+    </section>
+
+    <footer class="site-footer">
+      <section class="support glass-panel" aria-labelledby="support-title">
+        <div>
+          <span class="support__eyebrow">Sustain the forecast</span>
+          <h2 class="support__title" id="support-title">为浪漫续航</h2>
+          <p class="support__copy">算法服务器由个人开发者维护。你的每一份支持，都将用于获取更高精度的全球气象格点数据。</p>
+        </div>
+        <div class="support__actions">
+          <button class="support__button support__button--wechat" id="wechat-support-open" type="button">
+            <i data-lucide="heart-handshake" class="h-4 w-4" aria-hidden="true"></i>
+            微信赞赏
+          </button>
+        </div>
+      </section>
+
+      <div class="footer">
+        <span>数据由多源气象模型实时计算</span>
+        <span>Hangzhou · 30.25°N, 120.15°E <a class="footer__license" href="/credits" aria-label="图片版权说明">©</a></span>
+      </div>
+    </footer>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div class="support-modal" id="wechat-support-modal" role="dialog" aria-modal="true" aria-labelledby="wechat-support-title" hidden>
+    <button class="support-modal__backdrop" type="button" data-support-close aria-label="关闭赞赏弹窗"></button>
+    <div class="support-modal__card glass-panel">
+      <button class="support-modal__close" type="button" data-support-close aria-label="关闭">
+        <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
+      </button>
+      <span class="support__eyebrow">WeChat support</span>
+      <h2 class="support-modal__title" id="wechat-support-title">为浪漫续航</h2>
+      <p class="support-modal__copy">微信扫码赞赏。每一份支持，都将用于更高精度气象数据与服务器运行。</p>
+      <img class="support-modal__qr" src="assets/wechat-pay.jpg" alt="微信赞赏二维码" width="828" height="1124">
+      <p class="support-modal__hint">点击空白区域或按 Esc 关闭</p>
+    </div>
+  </div>
+
+  <div class="support-modal partner-modal" id="partner-modal" role="dialog" aria-modal="true" aria-labelledby="partner-modal-title" hidden>
+    <button class="support-modal__backdrop" type="button" data-partner-close aria-label="关闭商业合作弹窗"></button>
+    <div class="support-modal__card glass-panel">
+      <button class="support-modal__close" type="button" data-partner-close aria-label="关闭商业合作弹窗">
+        <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
+      </button>
+      <span class="support__eyebrow">Sunset Partner</span>
+      <h2 class="support-modal__title" id="partner-modal-title">一起做点与晚霞有关的事</h2>
+      <div class="partner-modal__directions">
+        <span>合作方向</span>
+        <strong>咖啡 · 住宿 · 器材租赁 · 摄影服务</strong>
+      </div>
+      <img class="support-modal__qr" src="assets/business.jpg" alt="商业合作微信二维码" width="888" height="1134">
+      <p class="partner-modal__note">扫码请备注：<br><strong>合作城市 + 品牌名称</strong></p>
+      <p class="support-modal__hint">点击空白区域或按 Esc 关闭</p>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="js/app.js?v=20260717-feedback-v20"></script>
+</body>
+</html>

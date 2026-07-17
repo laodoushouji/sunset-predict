@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /sunset
+Disallow: /health
+
+Sitemap: https://sunsetpredict.cloud/sitemap.xml
+Host: sunsetpredict.cloud

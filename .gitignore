@@ -1,0 +1,18 @@
+# Local environment secrets
+.env
+.env.*
+!.env.example
+!*.example
+
+# Runtime data and local tooling
+data/
+.gstack/
+*.tmp
+.DS_Store
+
+# Superseded local captures and duplicate source images
+/1
+/2
+/3
+/business.jpg
+/微信图片_*.jpg

@@ -1,0 +1,20 @@
+[Unit]
+Description=Sunset Predict API and Frontend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/sunset-predict-v2
+EnvironmentFile=/root/sunset-predict-v2/.env
+Environment=PORT=3003
+Environment=APP_ROOT=/root/sunset-predict-v2
+Environment=HISTORY_ROOT=/var/lib/sunset-predict/history
+Environment=FEEDBACK_ROOT=/var/lib/sunset-predict/feedback
+ExecStart=/usr/bin/node worker/src/server.mjs
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target
