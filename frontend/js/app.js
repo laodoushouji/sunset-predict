@@ -36,6 +36,31 @@ const FEEDBACK_QUALITY_LABELS = new Map([
   [20, '平淡'], [40, '微霞'], [60, '不错'], [80, '很棒'], [95, '爆燃'],
 ]);
 
+async function fetchApi(url, timeoutMs) {
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (attempt === 0 && (response.status === 429 || response.status >= 500)) {
+        await response.arrayBuffer().catch(() => {});
+        await new Promise(resolve => setTimeout(resolve, 250));
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+        continue;
+      }
+    }
+  }
+  throw lastError;
+}
+
 const REGIONAL_SPOTS = [
   { slug: 'beijing', city: '北京 · Beijing', name: '景山 / 故宫', hook: '故宫全景烧霞预警' },
   { slug: 'erhai', city: '大理 · Dali', name: '洱海', hook: '龙龛码头机位建议' },
@@ -472,7 +497,7 @@ async function fetchTimeline() {
   }
 
   try {
-    const response = await fetch(TIMELINE_API_URL, { signal: AbortSignal.timeout(30000) });
+    const response = await fetchApi(TIMELINE_API_URL, 30000);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const timeline = await response.json();
     timelineDays = timeline.days || [];
@@ -531,7 +556,7 @@ async function fetchRegionalSpots() {
   if (window.location.protocol === 'file:') return;
 
   try {
-    const response = await fetch(REGIONAL_API_URL, { signal: AbortSignal.timeout(20000) });
+    const response = await fetchApi(REGIONAL_API_URL, 20000);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const { spots = [] } = await response.json();
     spots.forEach(renderRegionalSpot);
@@ -578,7 +603,7 @@ async function fetchWaitanData() {
   if (window.location.protocol === 'file:') return;
 
   try {
-    const response = await fetch(WAITAN_API_URL, { signal: AbortSignal.timeout(8000) });
+    const response = await fetchApi(WAITAN_API_URL, 8000);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     waitanData = data;
@@ -611,7 +636,7 @@ function renderWaitan(data) {
 // ============================================
 async function fetchData() {
   try {
-    const res = await fetch(API_URL, { signal: AbortSignal.timeout(6000) });
+    const res = await fetchApi(API_URL, 6000);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     currentData = data;
