@@ -28,46 +28,19 @@ function shanghaiClock(now = new Date()) {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
   }).formatToParts(now).filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
   return {
     date: `${parts.year}-${parts.month}-${parts.day}`,
-    minutes: Number(parts.hour) * 60 + Number(parts.minute),
   };
 }
 
-function addMinutes(time, amount) {
-  const match = /^(\d{2}):(\d{2})$/.exec(time || '');
-  if (!match) return null;
-  const minutes = Number(match[1]) * 60 + Number(match[2]) + amount;
-  return {
-    minutes,
-    label: `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`,
-  };
-}
-
-function feedbackAvailability(date, prediction, now = new Date()) {
+function feedbackAvailability(date, _prediction, now = new Date()) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) {
     return { open: false, reason: '日期无效', code: 'INVALID_DATE' };
   }
   const clock = shanghaiClock(now);
-  if (date < clock.date) return { open: true, reason: '', code: 'OPEN' };
   if (date > clock.date) return { open: false, reason: '未来日期暂不能反馈', code: 'FUTURE_DATE' };
-
-  const sunset = prediction?.sunTimes?.sunset || prediction?.lightsOn || '19:00';
-  const opensAt = addMinutes(sunset, 20);
-  if (!opensAt) return { open: false, reason: '日落时间不足', code: 'SUNSET_UNAVAILABLE' };
-  if (clock.minutes < opensAt.minutes) {
-    return {
-      open: false,
-      reason: `今晚 ${opensAt.label} 后开放`,
-      code: 'NOT_OPEN_YET',
-      opensAt: opensAt.label,
-    };
-  }
-  return { open: true, reason: '', code: 'OPEN', opensAt: opensAt.label };
+  return { open: true, reason: '', code: 'OPEN' };
 }
 
 function normalizeFeedbackPayload(input = {}) {

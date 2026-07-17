@@ -862,23 +862,10 @@ function feedbackAvailabilityFor(data) {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
   }).formatToParts(new Date()).filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
   const today = `${clockParts.year}-${clockParts.month}-${clockParts.day}`;
-  if (date < today) return { open: true, reason: '' };
   if (date > today) return { open: false, reason: '未来日期暂不能反馈' };
-
-  const sunset = data.sunTimes?.sunset || data.lightsOn || '19:00';
-  const match = /^(\d{2}):(\d{2})$/.exec(sunset);
-  if (!match) return { open: false, reason: '日落时间不足' };
-  const opensAtMinutes = Number(match[1]) * 60 + Number(match[2]) + 20;
-  const nowMinutes = Number(clockParts.hour) * 60 + Number(clockParts.minute);
-  const opensAt = `${String(Math.floor(opensAtMinutes / 60) % 24).padStart(2, '0')}:${String(opensAtMinutes % 60).padStart(2, '0')}`;
-  return nowMinutes >= opensAtMinutes
-    ? { open: true, reason: '' }
-    : { open: false, reason: `今晚 ${opensAt} 后开放` };
+  return { open: true, reason: '' };
 }
 
 function renderFeedbackDraft() {

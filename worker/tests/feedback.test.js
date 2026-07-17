@@ -48,14 +48,12 @@ test('反馈载荷要求站点、日期、匿名标识与实际质量完整', ()
   );
 });
 
-test('反馈只在历史日期或今日日落二十分钟后开放', () => {
+test('反馈在今天和历史日期始终开放，未来日期不可提交', () => {
   const before = new Date('2026-07-17T11:24:00.000Z');
-  const after = new Date('2026-07-17T11:26:00.000Z');
 
   assert.equal(feedbackAvailability('2026-07-16', prediction, before).open, true);
   assert.equal(feedbackAvailability('2026-07-18', prediction, before).code, 'FUTURE_DATE');
-  assert.equal(feedbackAvailability('2026-07-17', prediction, before).code, 'NOT_OPEN_YET');
-  assert.equal(feedbackAvailability('2026-07-17', prediction, after).open, true);
+  assert.equal(feedbackAvailability('2026-07-17', prediction, before).open, true);
 });
 
 test('时间线按站点和日期绑定反馈对应预测', () => {
