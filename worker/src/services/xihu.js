@@ -7,6 +7,11 @@ const {
   getTargetHour,
   parseAirQuality,
 } = require('./shanghai');
+const {
+  buildSunsetWindow,
+  sampleRemote,
+  sampleWeather,
+} = require('./sunset-window');
 
 const XIHU_API = {
   target: 'https://api.open-meteo.com/v1/forecast?latitude=30.25&longitude=120.15&hourly=temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,relative_humidity_925hPa,relative_humidity_250hPa,precipitation_probability,precipitation,rain,weather_code&minutely_15=temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,precipitation,rain,weather_code&forecast_minutely_15=288&daily=sunrise,sunset&wind_speed_unit=ms&timezone=Asia%2FShanghai&forecast_days=3',
@@ -111,6 +116,39 @@ function getSunTimes(payload, date) {
   };
 }
 
+function buildXihuSunsetWindow(date, sunset, targetPayload, linanPayload, fuyangPayload, airQuality) {
+  return buildSunsetWindow({
+    date,
+    sunset,
+    effectiveOffsetMinutes: -15,
+    resolution: 'native-15m',
+    evaluateNode(localTime) {
+      const weather = sampleWeather(targetPayload, localTime, 'native-15m');
+      const linan = sampleRemote(linanPayload, localTime);
+      const fuyang = sampleRemote(fuyangPayload, localTime);
+      if (![weather?.cloudHigh, weather?.cloudMid, weather?.cloudLow, weather?.visibility, linan?.cloudLow].every(Number.isFinite)) {
+        return null;
+      }
+      const model = predictXihu(weather, { '临安': linan, '富阳': fuyang }, airQuality);
+      return {
+        quality: model.quality,
+        probability: model.probability,
+        weather: model.weather,
+        corrections: model.corrections,
+        metrics: {
+          cloudHigh: weather.cloudHigh,
+          cloudMid: weather.cloudMid,
+          cloudLow: weather.cloudLow,
+          humidity925: weather.lowLevelHumidity,
+          visibilityKm: weather.visibility,
+          remoteLowCloud: linan.cloudLow,
+          windowTransparency: 100 - linan.cloudLow,
+        },
+      };
+    },
+  });
+}
+
 async function getXihuData(options = {}) {
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   const waqiToken = options.waqiToken || (typeof process !== 'undefined' ? process.env.WAQI_TOKEN : undefined);
@@ -150,6 +188,9 @@ async function getXihuData(options = {}) {
         '富阳': fuyangPayload ? parseWindow(fuyangPayload, date, hour) : null,
       },
       sunTimes: getSunTimes(targetPayload, date),
+      sunsetWindow: sunset
+        ? buildXihuSunsetWindow(date, sunset.slice(11, 16), targetPayload, linanPayload, fuyangPayload, airQuality)
+        : { available: false, message: '趋势数据不足', timeline: [] },
     };
   }).filter(snapshot => snapshot.weather);
 
@@ -178,6 +219,7 @@ async function getXihuPrediction(options = {}) {
     date: snapshot.date,
     sunTimes: snapshot.sunTimes,
     dataResolution: snapshot.dataResolution,
+    sunsetWindow: snapshot.sunsetWindow,
     metrics: {
       cloudLow: snapshot.weather.cloudLow,
       cloudMid: snapshot.weather.cloudMid,
@@ -214,5 +256,6 @@ module.exports = {
   getXihuData,
   getXihuPrediction,
   getSunTimes,
+  buildXihuSunsetWindow,
   parseTargetAtSunsetOffset,
 };

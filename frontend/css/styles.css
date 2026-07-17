@@ -1382,6 +1382,128 @@ button,
   font-weight: 600;
 }
 
+.sunset-window__heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.sunset-window__meta {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  color: var(--faint);
+  font-size: 0.6rem;
+}
+
+.sunset-window__meta strong {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.sunset-window__state {
+  margin: 12px 0 0;
+  color: var(--faint);
+  font-size: 0.62rem;
+}
+
+.sunset-window__track {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+  padding-bottom: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.sunset-window__track::-webkit-scrollbar {
+  display: none;
+}
+
+.sunset-window__node {
+  min-width: 0;
+  padding: 12px 7px 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--muted);
+  text-align: center;
+  scroll-snap-align: start;
+  cursor: pointer;
+  transition: border-color 220ms ease, background 220ms ease, transform 220ms ease;
+}
+
+.sunset-window__node:hover,
+.sunset-window__node.is-active {
+  border-color: rgba(255, 174, 125, 0.5);
+  background: linear-gradient(160deg, rgba(255, 143, 91, 0.14), rgba(181, 135, 220, 0.09));
+  transform: translateY(-2px);
+}
+
+.sunset-window__node:disabled {
+  opacity: 0.38;
+  cursor: default;
+  transform: none;
+}
+
+.sunset-window__node span,
+.sunset-window__node small,
+.sunset-window__node em {
+  display: block;
+}
+
+.sunset-window__node span {
+  color: var(--faint);
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.sunset-window__node strong {
+  display: block;
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.sunset-window__node small {
+  margin-top: 6px;
+  color: var(--faint);
+  font-size: 0.54rem;
+}
+
+.sunset-window__node em {
+  margin-top: 9px;
+  color: #d8b09a;
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.sunset-window__node.is-active em {
+  color: #ffbc8f;
+}
+
+.sunset-window__summary {
+  margin-top: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.7rem;
+  line-height: 1.65;
+}
+
+.sunset-window__details {
+  min-height: 1.5em;
+  margin-top: 7px;
+  color: var(--faint);
+  font-size: 0.62rem;
+  line-height: 1.6;
+}
+
 .cloud-chart {
   display: grid;
   gap: 12px;
@@ -2059,6 +2181,23 @@ body.detail-open {
 
   .detail-hero__number {
     font-size: clamp(4rem, 20vw, 5.3rem);
+  }
+
+  .sunset-window__heading {
+    align-items: flex-start;
+  }
+
+  .sunset-window__meta {
+    max-width: 150px;
+  }
+
+  .sunset-window__track {
+    grid-template-columns: none;
+    grid-auto-columns: minmax(92px, 30%);
+    grid-auto-flow: column;
+    margin-right: -18px;
+    padding-right: 18px;
+    scroll-snap-type: x mandatory;
   }
 
   .camera-params > div {

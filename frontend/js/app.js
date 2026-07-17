@@ -756,6 +756,76 @@ function renderPartnerCard(data, spotId) {
   card.classList.toggle('is-recruiting', isRecruiting);
 }
 
+function renderSunsetWindow(data) {
+  const sunsetWindow = data.sunsetWindow || {};
+  const track = document.getElementById('sunset-window-track');
+  const state = document.getElementById('sunset-window-state');
+  const summary = document.getElementById('sunset-window-summary');
+  const details = document.getElementById('sunset-window-details');
+  const arrivalMeta = document.getElementById('arrival-meta');
+  const offset = timelineOffsetForDate(data.date) ?? 0;
+  const nodes = (sunsetWindow.timeline || []).slice(0, 6);
+  const resolution = nodes.find(node => node.resolution)?.resolution;
+  const resolutionLabel = resolution === 'native-15m' ? '15分钟数据' : '小时插值';
+
+  document.getElementById('sunset-window-forecast').textContent = offset > 0
+    ? `${relativeDayLabel(offset)}预报趋势`
+    : offset < 0 ? '历史预测记录' : '今日趋势';
+  document.getElementById('sunset-window-sunset').textContent = sunsetWindow.sunset
+    ? `日落 ${sunsetWindow.sunset}${sunsetWindow.effectiveSunset && sunsetWindow.effectiveSunset !== sunsetWindow.sunset ? ` · 有效 ${sunsetWindow.effectiveSunset}` : ''}`
+    : '日落 --';
+
+  if (!sunsetWindow.available || nodes.filter(node => Number.isFinite(node.quality)).length < 3) {
+    state.textContent = sunsetWindow.message || '趋势数据不足';
+    track.innerHTML = '';
+    summary.textContent = '关键时段数据不足，暂不生成峰值与出发建议。';
+    details.textContent = '';
+    arrivalMeta.textContent = '到达建议暂缺';
+    return;
+  }
+
+  state.textContent = `${resolutionLabel} · Quality 与观测成功率逐节点计算`;
+  track.innerHTML = nodes.map((node, index) => {
+    const quality = Number.isFinite(node.quality) ? Math.round(node.quality) : '--';
+    const probability = Number.isFinite(node.probability) ? `${Math.round(node.probability)}%` : '--';
+    const active = node.time === sunsetWindow.peakTime ? ' is-active' : '';
+    const disabled = Number.isFinite(node.quality) ? '' : ' disabled';
+    return `<button class="sunset-window__node${active}" type="button" data-window-index="${index}"${disabled}>
+      <span>${node.time || '--:--'}</span>
+      <strong>${quality}</strong>
+      <small>几率 ${probability}</small>
+      <em>${node.status || '等待'}</em>
+    </button>`;
+  }).join('');
+
+  const showNode = index => {
+    const node = nodes[index];
+    if (!node || !Number.isFinite(node.quality)) return;
+    track.querySelectorAll('.sunset-window__node').forEach((button, buttonIndex) => {
+      button.classList.toggle('is-active', buttonIndex === index);
+    });
+    const metrics = node.metrics || {};
+    const value = (number, suffix = '%') => Number.isFinite(Number(number)) ? `${Math.round(Number(number))}${suffix}` : '--';
+    details.textContent = `高云 ${value(metrics.cloudHigh)} · 低云 ${value(metrics.cloudLow)} · 西方光路 ${value(metrics.windowTransparency)} · 能见度 ${Number.isFinite(Number(metrics.visibilityKm)) ? `${Number(metrics.visibilityKm).toFixed(1)}km` : '--'}`;
+  };
+  track.querySelectorAll('.sunset-window__node').forEach(button => {
+    button.addEventListener('click', () => showNode(Number(button.dataset.windowIndex)));
+  });
+
+  const peakIndex = Math.max(0, nodes.findIndex(node => node.time === sunsetWindow.peakTime));
+  showNode(peakIndex);
+  if (sunsetWindow.recommendedArrival) {
+    const arrivalContext = sunsetWindow.arrivalNote?.startsWith('附近可赌')
+      ? '附近可赌 · '
+      : sunsetWindow.arrivalNote?.startsWith('适合拍摄清透落日') ? '适合拍摄清透落日 · ' : '';
+    summary.textContent = `预计峰值 ${sunsetWindow.peakTime} · ${arrivalContext}建议 ${sunsetWindow.recommendedArrival} 前到达 · 守候至 ${sunsetWindow.recommendedLeave}`;
+    arrivalMeta.textContent = `${sunsetWindow.recommendedArrival} 前到达`;
+  } else {
+    summary.textContent = `预计峰值 ${sunsetWindow.peakTime} · 不建议专程前往${sunsetWindow.recommendedLeave ? ` · 如在附近可守候至 ${sunsetWindow.recommendedLeave}` : ''}`;
+    arrivalMeta.textContent = '不建议专程前往';
+  }
+}
+
 function feedbackStorageKey(spot, date) {
   return `sunset-feedback:${spot}:${date}`;
 }
@@ -928,6 +998,7 @@ function renderDetailContent(data, spotId) {
   renderPartnerCard(advertiserData, spotId);
 
   renderDetailMetrics(data, score, grade, spotId);
+  renderSunsetWindow(data);
   renderWeatherDetails(data);
   renderFeedbackPanel(data, spotId);
   const bestSpot = spotId === 'xihu' ? getDynamicBestSpot(data.date) : null;

@@ -193,7 +193,7 @@
               <div class="detail-hero__advice">
                 <span class="detail__label">建议机位</span>
                 <strong id="best-spot">--</strong>
-                <span class="detail-hero__meta"><span id="sunset-time">--</span> 日落 · 建议提前 35 分钟到达</span>
+                <span class="detail-hero__meta"><span id="sunset-time">--</span> 日落 · <span id="arrival-meta">到达建议计算中</span></span>
               </div>
               <div class="camera-params" aria-label="建议相机参数">
                 <div><span>光圈</span><strong id="camera-aperture">f/8</strong></div>
@@ -205,6 +205,23 @@
 
             <div class="detail__chips" id="corrections" aria-label="预测修正因素"></div>
             <div class="detail__alpenglow" id="alpenglow-hint"></div>
+
+            <section class="detail-section sunset-window" aria-labelledby="sunset-window-title">
+              <div class="sunset-window__heading">
+                <div>
+                  <span class="detail__eyebrow">Sunset window</span>
+                  <h3 class="detail-section__title" id="sunset-window-title">日落窗口</h3>
+                </div>
+                <div class="sunset-window__meta">
+                  <span id="sunset-window-forecast"></span>
+                  <strong id="sunset-window-sunset">日落 --</strong>
+                </div>
+              </div>
+              <p class="sunset-window__state" id="sunset-window-state">趋势数据加载中</p>
+              <div class="sunset-window__track" id="sunset-window-track" role="group" aria-label="半小时日落摄影趋势"></div>
+              <div class="sunset-window__summary" id="sunset-window-summary"></div>
+              <div class="sunset-window__details" id="sunset-window-details" aria-live="polite"></div>
+            </section>
 
             <section class="detail-section" aria-labelledby="physics-title">
               <span class="detail__eyebrow">Physical layers</span>
@@ -399,6 +416,6 @@
   </div>
 
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-  <script src="js/app.js?v=20260717-resilience-v21"></script>
+  <script src="js/app.js?v=20260717-sunset-window-v22"></script>
 </body>
 </html>

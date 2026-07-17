@@ -4,10 +4,15 @@
  */
 
 const { predictWaitan, WAITAN_CONFIG } = require('./prediction');
+const {
+  buildSunsetWindow,
+  sampleRemote,
+  sampleWeather,
+} = require('./sunset-window');
 
 const SHANGHAI_API = {
-  target: 'https://api.open-meteo.com/v1/ecmwf?latitude=31.24&longitude=121.49&hourly=temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_925hPa,relative_humidity_250hPa,precipitation,rain,weather_code&timezone=Asia%2FShanghai&forecast_days=3',
-  targetFallback: 'https://api.open-meteo.com/v1/forecast?latitude=31.24&longitude=121.49&hourly=temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_925hPa,relative_humidity_250hPa,precipitation_probability,precipitation,rain,weather_code&timezone=Asia%2FShanghai&forecast_days=3',
+  target: 'https://api.open-meteo.com/v1/ecmwf?latitude=31.24&longitude=121.49&hourly=temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_925hPa,relative_humidity_250hPa,precipitation,rain,weather_code&daily=sunrise,sunset&timezone=Asia%2FShanghai&forecast_days=3',
+  targetFallback: 'https://api.open-meteo.com/v1/forecast?latitude=31.24&longitude=121.49&hourly=temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_925hPa,relative_humidity_250hPa,precipitation_probability,precipitation,rain,weather_code&daily=sunrise,sunset&timezone=Asia%2FShanghai&forecast_days=3',
   nearWindow: 'https://api.open-meteo.com/v1/forecast?latitude=31.15&longitude=121.12&hourly=cloud_cover_low,visibility&models=gfs_seamless&timezone=Asia%2FShanghai&forecast_days=3',
   farWindow: 'https://api.open-meteo.com/v1/forecast?latitude=31.24&longitude=119.92&hourly=cloud_cover_low,visibility,relative_humidity_850hPa,relative_humidity_250hPa&models=gfs_seamless&timezone=Asia%2FShanghai&forecast_days=3',
   airQuality: token => `https://api.waqi.info/feed/shanghai/?token=${encodeURIComponent(token)}`,
@@ -140,6 +145,50 @@ function getTargetHour(date) {
   return month >= 4 && month <= 10 ? 19 : 18;
 }
 
+function getSunTimes(payload, date) {
+  const index = payload?.daily?.time?.indexOf(date) ?? -1;
+  const sunrise = index >= 0 ? payload.daily.sunrise?.[index] : null;
+  const sunset = index >= 0 ? payload.daily.sunset?.[index] : null;
+  if (!sunrise || !sunset) return null;
+  return {
+    sunrise: sunrise.slice(11, 16),
+    sunset: sunset.slice(11, 16),
+    dayLength: Math.round((Date.parse(`${sunset}:00Z`) - Date.parse(`${sunrise}:00Z`)) / 60_000),
+  };
+}
+
+function buildWaitanSunsetWindow(date, sunset, targetPayload, nearPayload, farPayload, airQuality) {
+  return buildSunsetWindow({
+    date,
+    sunset,
+    resolution: 'interpolated-from-hourly',
+    evaluateNode(localTime) {
+      const weather = sampleWeather(targetPayload, localTime, 'interpolated-from-hourly');
+      const near = sampleRemote(nearPayload, localTime);
+      const far = sampleRemote(farPayload, localTime);
+      if (![weather?.cloudHigh, weather?.cloudMid, weather?.cloudLow, weather?.visibility, far?.cloudLow].every(Number.isFinite)) {
+        return null;
+      }
+      const model = predictWaitan(weather, { '青浦窗口': near, '苏州窗口': far }, airQuality);
+      return {
+        quality: model.quality,
+        probability: model.probability,
+        weather: model.weather,
+        corrections: model.corrections,
+        metrics: {
+          cloudHigh: weather.cloudHigh,
+          cloudMid: weather.cloudMid,
+          cloudLow: weather.cloudLow,
+          humidity925: weather.lowLevelHumidity,
+          visibilityKm: weather.visibility,
+          remoteLowCloud: far.cloudLow,
+          windowTransparency: 100 - far.cloudLow,
+        },
+      };
+    },
+  });
+}
+
 /**
  * 并行抓取上海三点气象和空气质量。
  * WAQI 失败或未配置 Token 时降级，不阻塞气象评分。
@@ -178,6 +227,7 @@ async function getShanghaiData(options = {}) {
 
   const snapshots = dates.map(date => {
     const hour = getTargetHour(date);
+    const sunTimes = getSunTimes(targetPayload, date);
     return {
       date,
       hour,
@@ -186,6 +236,10 @@ async function getShanghaiData(options = {}) {
         '青浦窗口': nearPayload ? parseWindow(nearPayload, date, hour) : null,
         '苏州窗口': farPayload ? parseWindow(farPayload, date, hour, true) : null,
       },
+      sunTimes,
+      sunsetWindow: sunTimes
+        ? buildWaitanSunsetWindow(date, sunTimes.sunset, targetPayload, nearPayload, farPayload, airQuality)
+        : { available: false, message: '趋势数据不足', timeline: [] },
     };
   }).filter(snapshot => snapshot.weather);
 
@@ -213,6 +267,8 @@ async function getShanghaiPrediction(options = {}) {
 
   const predictions = data.snapshots.map(snapshot => ({
     date: snapshot.date,
+    sunTimes: snapshot.sunTimes,
+    sunsetWindow: snapshot.sunsetWindow,
     ...predictWaitan(snapshot.weather, snapshot.windows, data.airQuality),
   }));
   const [today] = predictions;
@@ -236,6 +292,8 @@ module.exports = {
   findHourIndex,
   valueAt,
   getTargetHour,
+  getSunTimes,
+  buildWaitanSunsetWindow,
   getShanghaiData,
   getShanghaiPrediction,
   parseAirQuality,

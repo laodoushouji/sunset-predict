@@ -11,6 +11,11 @@ const {
   getForecastDates,
   valueAt,
 } = require('./shanghai');
+const {
+  buildSunsetWindow,
+  sampleRemote,
+  sampleWeather,
+} = require('./sunset-window');
 
 const CITY_SPOTS = {
   beijing: {
@@ -295,10 +300,45 @@ function buildCityPrediction(config, targetPayload, windowPayload, windowPoint, 
     const hour = targetHour(targetPayload, date);
     const weather = parseTarget(targetPayload, date, hour);
     const westernWeather = parseWindow(windowPayload, date, hour);
+    const sunTimes = getSunTimes(targetPayload, date);
     if (!weather) return null;
     return {
       date,
-      sunTimes: getSunTimes(targetPayload, date),
+      sunTimes,
+      sunsetWindow: sunTimes
+        ? buildSunsetWindow({
+          date,
+          sunset: sunTimes.sunset,
+          resolution: 'interpolated-from-hourly',
+          slowAfterglow: ['qingdao', 'huangshan'].includes(config.spot),
+          evaluateNode(localTime) {
+            const nodeWeather = sampleWeather(targetPayload, localTime, 'interpolated-from-hourly');
+            const nodeWindow = sampleRemote(windowPayload, localTime);
+            if (![nodeWeather?.cloudHigh, nodeWeather?.cloudMid, nodeWeather?.cloudLow, nodeWeather?.visibility, nodeWindow?.cloudLow].every(Number.isFinite)) {
+              return null;
+            }
+            const node = predictRegionalSpot(config, nodeWeather, nodeWindow, {
+              windowPoint,
+              typhoonNearby: options.typhoonNearby ?? null,
+            });
+            return {
+              quality: node.quality,
+              probability: node.probability,
+              weather: node.weather,
+              corrections: node.corrections,
+              metrics: {
+                cloudHigh: nodeWeather.cloudHigh,
+                cloudMid: nodeWeather.cloudMid,
+                cloudLow: nodeWeather.cloudLow,
+                humidity925: nodeWeather.lowLevelHumidity,
+                visibilityKm: nodeWeather.visibility,
+                remoteLowCloud: nodeWindow.cloudLow,
+                windowTransparency: 100 - nodeWindow.cloudLow,
+              },
+            };
+          },
+        })
+        : { available: false, message: '趋势数据不足', timeline: [] },
       ...predictRegionalSpot(config, weather, westernWeather, {
         windowPoint,
         typhoonNearby: options.typhoonNearby ?? null,
