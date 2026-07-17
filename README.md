@@ -10,7 +10,7 @@
 - 后端：Node.js HTTP 服务，监听 `127.0.0.1:3003`。
 - 数据：Open-Meteo 气象格点，可选 WAQI 空气质量。
 - 部署：阿里云香港服务器，Nginx、systemd、HTTPS。
-- 持久化：历史快照位于 `/var/lib/sunset-predict/history`，匿名实况反馈位于 `/var/lib/sunset-predict/feedback`。
+- 持久化：历史快照位于 `/var/lib/sunset-predict/history`，匿名实况反馈位于 `/var/lib/sunset-predict/feedback`，全国站最近成功快照位于 `/var/lib/sunset-predict/cache`。
 
 ## 本地开发
 
@@ -59,6 +59,7 @@ node --test worker/tests/*.test.js
 | `APP_ROOT` | 项目根目录 |
 | `HISTORY_ROOT` | 历史快照目录 |
 | `FEEDBACK_ROOT` | 匿名实况反馈目录 |
+| `CACHE_ROOT` | 全国站最近成功快照目录 |
 
 `.env` 已被 Git 忽略。Token 不得写入前端、源码、测试输出或提交记录。
 

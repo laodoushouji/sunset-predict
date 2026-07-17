@@ -7,7 +7,8 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { getXihuPrediction } = require('./services/xihu');
 const { getShanghaiPrediction } = require('./services/shanghai');
-const { CITY_ALIASES, CITY_SPOTS, getAllCityPredictions, getCityPrediction } = require('./services/cities');
+const { CITY_ALIASES, CITY_SPOTS, getAllCityPredictions } = require('./services/cities');
+const { createMemoryCache } = require('./services/memory-cache');
 const { buildTimeline } = require('./services/timeline');
 const {
   FeedbackError,
@@ -22,8 +23,10 @@ const APP_ROOT = process.env.APP_ROOT || path.resolve(path.dirname(fileURLToPath
 const FRONTEND_ROOT = path.join(APP_ROOT, 'frontend');
 const HISTORY_ROOT = process.env.HISTORY_ROOT || path.join(APP_ROOT, 'data/history');
 const FEEDBACK_ROOT = process.env.FEEDBACK_ROOT || path.join(APP_ROOT, 'data/feedback');
+const CACHE_ROOT = process.env.CACHE_ROOT || path.join(APP_ROOT, 'data/cache');
+const REGIONAL_CACHE_FILE = path.join(CACHE_ROOT, 'regional-latest.json');
 const CACHE_TTL_MS = 10 * 60 * 1000;
-const cache = new Map();
+const cache = createMemoryCache(CACHE_TTL_MS);
 
 const STATIC_FILES = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
@@ -60,7 +63,7 @@ function sendJson(response, status, data) {
   send(response, status, JSON.stringify(data), {
     'content-type': 'application/json; charset=utf-8',
     'access-control-allow-origin': '*',
-    'cache-control': status === 200 ? 'public, max-age=300' : 'no-store',
+    'cache-control': 'no-store',
   });
 }
 
@@ -87,18 +90,16 @@ async function readJsonBody(request, maxBytes = 8192) {
 }
 
 async function cached(key, loader) {
-  const current = cache.get(key);
-  if (current && Date.now() - current.createdAt < CACHE_TTL_MS) return current.value;
-  const value = await loader();
-  cache.set(key, { createdAt: Date.now(), value });
-  return value;
+  return cache.get(key, loader);
 }
+
+const loadRegionalSpots = () => getAllCityPredictions({ cacheFile: REGIONAL_CACHE_FILE });
 
 async function loadTimeline() {
   const [xihu, waitan, regional] = await Promise.all([
     cached('xihu', () => getXihuPrediction()),
     cached('waitan', () => getShanghaiPrediction()),
-    cached('regional-spots', () => getAllCityPredictions()),
+    cached('regional-spots', loadRegionalSpots),
   ]);
   return buildTimeline(xihu, waitan, regional, HISTORY_ROOT);
 }
@@ -190,14 +191,17 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (url.pathname === '/api/spots' || url.pathname === '/api/spots/') {
-      sendJson(response, 200, await cached('regional-spots', () => getAllCityPredictions()));
+      sendJson(response, 200, await cached('regional-spots', loadRegionalSpots));
       return;
     }
 
     const cityMatch = url.pathname.match(/^\/api\/spot\/([a-z-]+)\/?$/);
     if (cityMatch && (CITY_SPOTS[cityMatch[1]] || CITY_ALIASES[cityMatch[1]])) {
-      const slug = cityMatch[1];
-      sendJson(response, 200, await cached(`city:${slug}`, () => getCityPrediction(slug)));
+      const slug = CITY_ALIASES[cityMatch[1]] || cityMatch[1];
+      const regional = await cached('regional-spots', loadRegionalSpots);
+      const prediction = regional.spots.find(spot => spot.spot === slug);
+      if (!prediction) throw new Error(`站点数据缺失: ${slug}`);
+      sendJson(response, 200, prediction);
       return;
     }
 

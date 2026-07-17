@@ -13,17 +13,37 @@ const SHANGHAI_API = {
   airQuality: token => `https://api.waqi.info/feed/shanghai/?token=${encodeURIComponent(token)}`,
 };
 
-async function fetchJson(url, fetchImpl, timeoutMs = 8000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+async function fetchJson(url, fetchImpl, timeoutMs = 8000, retryOptions = {}) {
+  const attempts = Math.max(1, retryOptions.attempts ?? 2);
+  const baseDelayMs = Math.max(0, retryOptions.baseDelayMs ?? 250);
+  let lastError;
 
-  try {
-    const response = await fetchImpl(url, { signal: controller.signal });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
-  } finally {
-    clearTimeout(timer);
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetchImpl(url, { signal: controller.signal });
+      if (!response.ok) {
+        const error = new Error(`HTTP ${response.status}`);
+        error.status = response.status;
+        const retryAfter = Number(response.headers.get('retry-after'));
+        error.retryAfterMs = Number.isFinite(retryAfter) ? Math.min(2000, retryAfter * 1000) : null;
+        throw error;
+      }
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+      const retryable = !error.status || error.status === 429 || error.status >= 500;
+      if (!retryable || attempt === attempts - 1) throw error;
+      const delayMs = error.retryAfterMs ?? baseDelayMs * (2 ** attempt);
+      if (delayMs > 0) await new Promise(resolve => setTimeout(resolve, delayMs));
+    } finally {
+      clearTimeout(timer);
+    }
   }
+
+  throw lastError;
 }
 
 function getForecastDates(payload) {

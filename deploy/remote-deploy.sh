@@ -16,6 +16,7 @@ nginx_backup="$backup_root/sunset.conf.pre-v2-$deploy_stamp"
 service_backup="$backup_root/sunset-predict.service.pre-v2-$deploy_stamp"
 history_root=/var/lib/sunset-predict/history
 feedback_root=/var/lib/sunset-predict/feedback
+cache_root=/var/lib/sunset-predict/cache
 
 if systemctl is-active --quiet sunset-predict.service; then
   previous_service_active=1
@@ -73,6 +74,7 @@ mv "$env_staging" "$release_dir/.env"
 chmod 600 "$release_dir/.env"
 install -d -m 750 "$history_root"
 install -d -m 750 "$feedback_root"
+install -d -m 750 "$cache_root"
 
 "$node_bin" --check "$release_dir/worker/src/server.mjs"
 "$node_bin" --check "$release_dir/worker/src/services/prediction.js"
@@ -81,6 +83,7 @@ install -d -m 750 "$feedback_root"
 "$node_bin" --check "$release_dir/worker/src/services/cities.js"
 "$node_bin" --check "$release_dir/worker/src/services/timeline.js"
 "$node_bin" --check "$release_dir/worker/src/services/feedback.js"
+"$node_bin" --check "$release_dir/worker/src/services/memory-cache.js"
 "$node_bin" --test "$release_dir"/worker/tests/*.test.js
 
 cp "$nginx_file" "$nginx_backup"

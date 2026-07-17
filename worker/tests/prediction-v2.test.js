@@ -89,6 +89,20 @@ test('V3 同时输出原始物理分与当前展示分', () => {
   assert.equal(result.components.quality, result.quality);
 });
 
+test('阴天厚云幕不得进入 GREAT 或 FIRE', () => {
+  for (const spotId of ['xihu', 'waitan', 'beijing', 'erhai', 'chongqing', 'xiamen', 'qingdao', 'chengdu', 'shenzhen', 'huangshan']) {
+    const result = calculateSunsetScore(
+      spotId,
+      { ...baseWeather, cloudHigh: 85, cloudMid: 85, weatherCode: 3 },
+      { cloudLow: 5 }
+    );
+    assert.equal(result.weather.label, '阴');
+    assert.ok(result.quality <= 59, `${spotId} 阴天质量分不应为 ${result.quality}`);
+    assert.ok(['CLEAR', 'FAIR'].includes(result.grade));
+    assert.ok(result.corrections.some(item => item.item === '阴天厚云上限'));
+  }
+});
+
 test('等级边界返回 NONE/CLEAR/FAIR/GREAT/FIRE', () => {
   assert.equal(getScoreGrade(0), 'NONE');
   assert.equal(getScoreGrade(1), 'CLEAR');
@@ -124,8 +138,8 @@ test('西湖使用固定水面反射加分与提前15分钟标记', () => {
 });
 
 test('西湖大雨将质量分与观测成功率归零，微雨只压低成功率', () => {
-  const dry = calculateSunsetScore('xihu', { ...baseWeather, precipitationRate: 0, weatherCode: 3 }, { cloudLow: 5 });
-  const stopped = calculateSunsetScore('xihu', { ...baseWeather, precipitationRate: 0, weatherCode: 3 }, { cloudLow: 5 });
+  const dry = calculateSunsetScore('xihu', { ...baseWeather, precipitationRate: 0, weatherCode: 2 }, { cloudLow: 5 });
+  const overcast = calculateSunsetScore('xihu', { ...baseWeather, precipitationRate: 0, weatherCode: 3 }, { cloudLow: 5 });
   const drizzle = calculateSunsetScore(
     'xihu',
     { ...baseWeather, precipitationRate: 0.2, precipitationProbability: 75, weatherCode: 51 },
@@ -137,7 +151,8 @@ test('西湖大雨将质量分与观测成功率归零，微雨只压低成功�
     { cloudLow: 5 }
   );
 
-  assert.equal(stopped.probability, dry.probability);
+  assert.equal(overcast.probability, dry.probability);
+  assert.ok(overcast.score <= 59);
   assert.equal(drizzle.score, dry.score);
   assert.ok(drizzle.probability <= 10);
   assert.equal(rain.score, 0);

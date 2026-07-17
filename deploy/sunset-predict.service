@@ -11,6 +11,7 @@ Environment=PORT=3003
 Environment=APP_ROOT=/root/sunset-predict-v2
 Environment=HISTORY_ROOT=/var/lib/sunset-predict/history
 Environment=FEEDBACK_ROOT=/var/lib/sunset-predict/feedback
+Environment=CACHE_ROOT=/var/lib/sunset-predict/cache
 ExecStart=/usr/bin/node worker/src/server.mjs
 Restart=always
 RestartSec=5

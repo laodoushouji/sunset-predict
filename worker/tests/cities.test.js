@@ -1,5 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
 
 const {
   CITY_SPOTS,
@@ -51,10 +54,11 @@ function windowPayload() {
 }
 
 function createFetch() {
-  return async url => new Response(
-    JSON.stringify(url.includes('&daily=') ? targetPayload() : windowPayload()),
-    { status: 200 }
-  );
+  return async url => {
+    const payload = url.includes('&daily=') ? targetPayload() : windowPayload();
+    const locations = new URL(url).searchParams.get('latitude').split(',').length;
+    return new Response(JSON.stringify(locations > 1 ? Array(locations).fill(payload) : payload), { status: 200 });
+  };
 }
 
 test('配置包含 8 个新增摄影站点', () => {
@@ -132,14 +136,39 @@ test('jingshan API 别名复用北京景山模型', async () => {
 });
 
 test('聚合服务返回全部 8 个站点', async () => {
-  const result = await getAllCityPredictions({ fetchImpl: createFetch() });
+  let requests = 0;
+  const fetchImpl = async url => {
+    requests += 1;
+    return createFetch()(url);
+  };
+  const result = await getAllCityPredictions({ fetchImpl });
 
   assert.equal(result.spots.length, 8);
+  assert.equal(requests, 2);
   assert.equal(result.spots.every(item => typeof item.quality === 'number'), true);
   assert.equal(result.spots.every(item => typeof item.rawQuality === 'number'), true);
   assert.equal(result.spots.every(item => typeof item.probability === 'number'), true);
   assert.equal(result.spots.every(item => Number.isFinite(item.metrics?.windowTransparency)), true);
   assert.equal(result.spots.every(item => item.weather?.label === '多云'), true);
+});
+
+test('全国站上游失败时返回完整的最近成功快照', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'sunset-regional-'));
+  const cacheFile = path.join(directory, 'latest.json');
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+
+  const live = await getAllCityPredictions({ fetchImpl: createFetch(), cacheFile });
+  const fallback = await getAllCityPredictions({
+    fetchImpl: async () => new Response('{}', { status: 503 }),
+    cacheFile,
+    retryOptions: { attempts: 1, baseDelayMs: 0 },
+  });
+
+  assert.equal(live.cacheStatus, 'live');
+  assert.equal(fallback.cacheStatus, 'stale');
+  assert.equal(fallback.spots.length, 8);
+  assert.equal(fallback.spots.every(item => typeof item.quality === 'number' && !item.error), true);
+  assert.equal(fallback.spots.every(item => item.sourceStatus.openMeteo === 'stale-cache'), true);
 });
 
 test('Worker 路由返回北京站预测', async () => {

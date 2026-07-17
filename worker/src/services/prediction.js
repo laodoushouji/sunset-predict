@@ -372,6 +372,14 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
   const precipitationProbability = Number.isFinite(weatherMeta.precipitationProbability)
     ? `，降水概率${weatherMeta.precipitationProbability}%`
     : '';
+  if (weatherMeta.kind === 'overcast' && score > 59) {
+    score = 59;
+    corrections.push({
+      item: '阴天厚云上限',
+      value: '≤59',
+      desc: '天气代码判定为阴，厚云幕下不进入高质量晚霞等级',
+    });
+  }
   if (weatherMeta.blocksSunset) {
     score = 0;
     probabilityCap = 0;

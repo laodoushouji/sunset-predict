@@ -3,6 +3,8 @@ const {
   getQualityLabel,
   predictColor,
 } = require('./prediction');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 const {
   fetchJson,
   findHourIndex,
@@ -134,9 +136,12 @@ function resolveWindowPoint(config, date) {
 }
 
 function forecastUrl(point, fields, includeDaily = false, includePast = false) {
+  const points = Array.isArray(point) ? point : [point];
+  const latitudes = points.map(item => item.lat).join(',');
+  const longitudes = points.map(item => item.lon).join(',');
   const daily = includeDaily ? '&daily=sunrise,sunset' : '';
   const past = includePast ? '&past_hours=24' : '';
-  return `https://api.open-meteo.com/v1/forecast?latitude=${point.lat}&longitude=${point.lon}&hourly=${fields}${daily}${past}&wind_speed_unit=ms&timezone=Asia%2FShanghai&forecast_days=3`;
+  return `https://api.open-meteo.com/v1/forecast?latitude=${latitudes}&longitude=${longitudes}&hourly=${fields}${daily}${past}&wind_speed_unit=ms&timezone=Asia%2FShanghai&forecast_days=3`;
 }
 
 function getSunTimes(payload, date) {
@@ -278,9 +283,13 @@ async function getCityPrediction(slug, options = {}) {
   const targetFields = 'temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_direction_10m,pressure_msl,relative_humidity_925hPa,relative_humidity_700hPa,relative_humidity_250hPa,wind_speed_700hPa,precipitation_probability,precipitation,rain,weather_code';
   const windowFields = 'cloud_cover_low,visibility';
   const [targetPayload, windowPayload] = await Promise.all([
-    fetchJson(forecastUrl(config.target, targetFields, true, true), fetchImpl),
-    fetchJson(forecastUrl(windowPoint, windowFields), fetchImpl),
+    fetchJson(forecastUrl(config.target, targetFields, true, true), fetchImpl, options.timeoutMs, options.retryOptions),
+    fetchJson(forecastUrl(windowPoint, windowFields), fetchImpl, options.timeoutMs, options.retryOptions),
   ]);
+  return buildCityPrediction(config, targetPayload, windowPayload, windowPoint, options);
+}
+
+function buildCityPrediction(config, targetPayload, windowPayload, windowPoint, options = {}) {
   const dates = targetPayload?.daily?.time?.slice(0, 3) || getForecastDates(targetPayload);
   const predictions = dates.map(date => {
     const hour = targetHour(targetPayload, date);
@@ -323,25 +332,81 @@ async function getCityPrediction(slug, options = {}) {
   };
 }
 
+function normalizeBatchPayload(payload, expectedLength) {
+  const items = Array.isArray(payload) ? payload : [payload];
+  if (items.length !== expectedLength) throw new Error(`批量气象数据数量异常: ${items.length}/${expectedLength}`);
+  return items;
+}
+
+async function readRegionalCache(cacheFile) {
+  if (!cacheFile) return null;
+  try {
+    const payload = JSON.parse(await fs.readFile(cacheFile, 'utf8'));
+    if (payload?.spots?.length !== Object.keys(CITY_SPOTS).length) return null;
+    if (payload.spots.some(spot => !Number.isFinite(spot.quality) || spot.error)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+async function writeRegionalCache(cacheFile, payload) {
+  if (!cacheFile) return;
+  await fs.mkdir(path.dirname(cacheFile), { recursive: true });
+  const temporaryFile = `${cacheFile}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(temporaryFile, JSON.stringify(payload));
+  await fs.rename(temporaryFile, cacheFile);
+}
+
+function staleRegionalCache(payload, error) {
+  return {
+    ...payload,
+    cacheStatus: 'stale',
+    fallbackAt: new Date().toISOString(),
+    fallbackReason: error.message,
+    spots: payload.spots.map(spot => ({
+      ...spot,
+      sourceStatus: { ...spot.sourceStatus, openMeteo: 'stale-cache', westernWindow: 'stale-cache' },
+      statusText: '最近成功预测 · 上游恢复中',
+    })),
+  };
+}
+
 async function getAllCityPredictions(options = {}) {
   const entries = Object.keys(CITY_SPOTS);
-  const results = [];
-  for (let index = 0; index < entries.length; index += 2) {
-    const batch = entries.slice(index, index + 2);
-    results.push(...await Promise.allSettled(batch.map(slug => getCityPrediction(slug, options))));
+  const configs = entries.map(slug => CITY_SPOTS[slug]);
+  const fetchImpl = options.fetchImpl || globalThis.fetch;
+  if (typeof fetchImpl !== 'function') throw new Error('fetch implementation is required');
+  const windowDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+  const windowPoints = configs.map(config => resolveWindowPoint(config, windowDate));
+  const targetFields = 'temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_direction_10m,pressure_msl,relative_humidity_925hPa,relative_humidity_700hPa,relative_humidity_250hPa,wind_speed_700hPa,precipitation_probability,precipitation,rain,weather_code';
+  const windowFields = 'cloud_cover_low,visibility';
+
+  try {
+    const [targetBatch, windowBatch] = await Promise.all([
+      fetchJson(forecastUrl(configs.map(config => config.target), targetFields, true, true), fetchImpl, options.timeoutMs, options.retryOptions),
+      fetchJson(forecastUrl(windowPoints, windowFields), fetchImpl, options.timeoutMs, options.retryOptions),
+    ]);
+    const targetPayloads = normalizeBatchPayload(targetBatch, entries.length);
+    const windowPayloads = normalizeBatchPayload(windowBatch, entries.length);
+    const result = {
+      spots: configs.map((config, index) => buildCityPrediction(
+        config,
+        targetPayloads[index],
+        windowPayloads[index],
+        windowPoints[index],
+        options
+      )),
+      fetchedAt: new Date().toISOString(),
+      cacheStatus: 'live',
+    };
+    await writeRegionalCache(options.cacheFile, result).catch(() => {});
+    return result;
+  } catch (error) {
+    const cached = await readRegionalCache(options.cacheFile);
+    if (cached) return staleRegionalCache(cached, error);
+    throw error;
   }
-  for (let index = 0; index < results.length; index += 1) {
-    if (results[index].status === 'fulfilled') continue;
-    results[index] = await getCityPrediction(entries[index], options)
-      .then(value => ({ status: 'fulfilled', value }))
-      .catch(reason => ({ status: 'rejected', reason }));
-  }
-  return {
-    spots: results.map((result, index) => result.status === 'fulfilled'
-      ? result.value
-      : { spot: entries[index], spotName: CITY_SPOTS[entries[index]].spotName, error: result.reason.message }),
-    fetchedAt: new Date().toISOString(),
-  };
 }
 
 module.exports = {
@@ -350,6 +415,7 @@ module.exports = {
   calculateSunsetAzimuth,
   destinationPoint,
   forecastUrl,
+  buildCityPrediction,
   getAllCityPredictions,
   getCityPrediction,
   getSunTimes,
