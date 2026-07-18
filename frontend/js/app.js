@@ -527,7 +527,7 @@ function renderRegionalCards() {
       aria-controls="detail-panel"
       aria-label="${spot.name}晚霞预测，点击展开摄影指南"
     >
-      <img class="city-card__image" src="assets/city-${spot.slug}.webp?v=20260717-city-images-v2" alt="${spot.name}标志性晚霞摄影景观" loading="lazy" decoding="async">
+      <img class="city-card__image" src="assets/city-${spot.slug}.webp?v=20260718-city-images-v3" alt="${spot.name}标志性晚霞摄影景观" loading="lazy" decoding="async">
       <div class="city-card__content">
         <div class="city-card__top">
           <p class="city-card__city">${spot.city}</p>
@@ -740,7 +740,7 @@ function openDetailFromHash() {
 function partnerImageForSpot(spotId) {
   if (spotId === 'xihu') return 'assets/xihu-sunset.webp';
   if (spotId === 'waitan') return 'assets/waitan-sunset.webp';
-  return `assets/city-${spotId}.webp?v=20260717-city-images-v2`;
+  return `assets/city-${spotId}.webp?v=20260718-city-images-v3`;
 }
 
 function renderPartnerCard(data, spotId) {

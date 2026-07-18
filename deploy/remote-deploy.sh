@@ -126,8 +126,9 @@ for slug in beijing erhai chongqing xiamen qingdao chengdu shenzhen huangshan; d
   test "$(wc -c < "/tmp/sunset-v2-city-$slug.webp")" -lt 200000
 done
 test "$(sha256sum /tmp/sunset-v2-city-erhai.webp | awk '{print $1}')" = "c2639568e5ea7a47a64704257d479940981f5e66fd5c40bec20e5a77be441ed7"
-test "$(sha256sum /tmp/sunset-v2-city-xiamen.webp | awk '{print $1}')" = "2b41389d896005cb8e2a975ce5bd177ed74d50eeee90ed00f8fd993c6d937dd5"
+test "$(sha256sum /tmp/sunset-v2-city-xiamen.webp | awk '{print $1}')" = "7a2cb3424fb4a7eab5c323917fb54fb4efd48fd4916b9edec3ab423138cc8dd2"
 test "$(sha256sum /tmp/sunset-v2-city-qingdao.webp | awk '{print $1}')" = "763719f74811494ff257bd9b8cb15f1d0c8e8bb0d9b274c46eabe411a833a4ac"
+test "$(sha256sum /tmp/sunset-v2-city-huangshan.webp | awk '{print $1}')" = "f80b7120f867bec059432488c4af6ed55924337d7217e7d796cc592aa8e5198b"
 curl -fsS http://127.0.0.1:3003/wechat-pay.jpg -o /tmp/sunset-v2-qr-check.jpg
 test "$(sha256sum /tmp/sunset-v2-qr-check.jpg | awk '{print $1}')" = "963811c8cd09b1a445d4bb97df695c4f1df6fdb51f05bc09fa5ee24ed00203a5"
 curl -fsS http://127.0.0.1:3003/assets/business.jpg -o /tmp/sunset-v2-business-check.jpg
@@ -287,8 +288,9 @@ for slug in beijing erhai chongqing xiamen qingdao chengdu shenzhen huangshan; d
   test "$(wc -c < "/tmp/sunset-v2-public-city-$slug.webp")" -lt 200000
 done
 test "$(sha256sum /tmp/sunset-v2-public-city-erhai.webp | awk '{print $1}')" = "c2639568e5ea7a47a64704257d479940981f5e66fd5c40bec20e5a77be441ed7"
-test "$(sha256sum /tmp/sunset-v2-public-city-xiamen.webp | awk '{print $1}')" = "2b41389d896005cb8e2a975ce5bd177ed74d50eeee90ed00f8fd993c6d937dd5"
+test "$(sha256sum /tmp/sunset-v2-public-city-xiamen.webp | awk '{print $1}')" = "7a2cb3424fb4a7eab5c323917fb54fb4efd48fd4916b9edec3ab423138cc8dd2"
 test "$(sha256sum /tmp/sunset-v2-public-city-qingdao.webp | awk '{print $1}')" = "763719f74811494ff257bd9b8cb15f1d0c8e8bb0d9b274c46eabe411a833a4ac"
+test "$(sha256sum /tmp/sunset-v2-public-city-huangshan.webp | awk '{print $1}')" = "f80b7120f867bec059432488c4af6ed55924337d7217e7d796cc592aa8e5198b"
 
 curl -fsS https://sunsetpredict.cloud/sunset | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const m=j.metrics;if(j.spot!=='xihu'||typeof j.rawQuality!=='number'||j.rawQuality!==j.quality||typeof j.probability!=='number'||typeof j.verdict!=='string'||j.modelVersion!=='quality-v3'||j.source!=='xihu-model-v3'||j.timeOffsetMinutes!==-15||j.sourceStatus?.waqi!=='connected'||j.days?.length!==3||j.days.some(d=>typeof d.rawQuality!=='number'||typeof d.probability!=='number')||![m?.cloudLow,m?.cloudMid,m?.cloudHigh,m?.visibilityKm,m?.windowTransparency].every(Number.isFinite))process.exit(1)})"
 curl -fsS https://sunsetpredict.cloud/sunset | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const m=j.metrics;if(j.sourceStatus?.precipitation!=='connected'||![m?.precipitationMm,m?.precipitationRateMmH,m?.precipitationProbability,m?.weatherCode].every(Number.isFinite))process.exit(1)})"
