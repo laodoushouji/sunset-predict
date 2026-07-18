@@ -1,0 +1,8 @@
+{
+  "name": "sunset-predict",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "suncalc": "2.0.1"
+  }
+}

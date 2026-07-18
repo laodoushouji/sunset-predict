@@ -9,6 +9,7 @@
 - 前端：原生 HTML、CSS、JavaScript，Lucide Icons。
 - 后端：Node.js HTTP 服务，监听 `127.0.0.1:3003`。
 - 数据：Open-Meteo 提供云量、能见度等物理格点；QWeather 提供天气现象与小时降水；WAQI 空气质量可选。
+- 摄影时间：SunCalc 2.0.1 按太阳高度 -4° 至 -8° 计算西湖与外滩蓝调窗口，并输出蓝调质量与相机参数。
 - 部署：阿里云香港服务器，Nginx、systemd、HTTPS。
 - 持久化：历史快照位于 `/var/lib/sunset-predict/history`，匿名实况反馈位于 `/var/lib/sunset-predict/feedback`，全国站最近成功快照位于 `/var/lib/sunset-predict/cache`。
 

@@ -20,6 +20,8 @@ let selectedDayIndex = 0;
 let suppressClickUntil = 0;
 let advertiserData = window.advertiserData || null;
 let ephemeralFeedbackClientId = null;
+let blueHourTimer = null;
+let blueHourThemeTimer = null;
 const feedbackDraft = {
   spot: null,
   date: null,
@@ -826,6 +828,77 @@ function renderSunsetWindow(data) {
   }
 }
 
+function formatCountdown(milliseconds) {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds].map(value => String(value).padStart(2, '0')).join(':');
+}
+
+function scheduleBlueHourTheme(data) {
+  if (blueHourThemeTimer) clearInterval(blueHourThemeTimer);
+  const update = () => {
+    const blueHour = data?.blueHour;
+    const isToday = timelineOffsetForDate(data?.date) === 0;
+    const now = Date.now();
+    const active = isToday && blueHour?.available && now >= Date.parse(blueHour.startAt) && now <= Date.parse(blueHour.endAt);
+    document.body.classList.toggle('blue-hour-active', Boolean(active));
+  };
+  update();
+  blueHourThemeTimer = setInterval(update, 30_000);
+}
+
+function renderBlueHour(data, spotId) {
+  if (blueHourTimer) {
+    clearInterval(blueHourTimer);
+    blueHourTimer = null;
+  }
+  const section = document.getElementById('blue-hour-section');
+  const blueHour = data.blueHour;
+  if (!['xihu', 'waitan'].includes(spotId) || !blueHour?.available) {
+    section.hidden = true;
+    return;
+  }
+
+  section.hidden = false;
+  document.getElementById('blue-hour-time').textContent = `${blueHour.start}–${blueHour.end}`;
+  document.getElementById('blue-hour-route').textContent = `日落 ${data.sunTimes?.sunset || '--:--'} → 晚霞峰值 ${data.sunsetWindow?.peakTime || '--:--'} → 极致蓝调 ${blueHour.start}`;
+  document.getElementById('blue-hour-score').textContent = Math.round(blueHour.score);
+  document.getElementById('blue-hour-label').textContent = blueHour.label;
+  document.getElementById('blue-hour-advice').textContent = blueHour.advice;
+  document.getElementById('blue-hour-components').textContent = `能见度 ${Number.isFinite(blueHour.components?.visibilityKm) ? `${blueHour.components.visibilityKm.toFixed(1)}km` : '--'} · 总云量 ${Number.isFinite(blueHour.components?.cloudCover) ? `${Math.round(blueHour.components.cloudCover)}%` : '--'} · ${blueHour.airQualityHint}`;
+  document.getElementById('blue-hour-params').textContent = `长曝光 ${blueHour.camera?.shutter || '2–8s'} · ${blueHour.camera?.iso || 'ISO 100'} · ${blueHour.camera?.aperture || 'f/8'} · 白平衡 ${blueHour.camera?.whiteBalance || '3600K'}`;
+  requestAnimationFrame(() => {
+    document.getElementById('blue-hour-fill').style.width = `${Math.max(0, Math.min(100, blueHour.score))}%`;
+  });
+
+  const countdown = document.getElementById('blue-hour-countdown');
+  const update = () => {
+    const offset = timelineOffsetForDate(data.date);
+    if (offset !== 0) {
+      countdown.textContent = `${relativeDayLabel(offset ?? 0)}蓝调窗口 · ${blueHour.start}–${blueHour.end}`;
+      return;
+    }
+    const now = Date.now();
+    const startAt = Date.parse(blueHour.startAt);
+    const endAt = Date.parse(blueHour.endAt);
+    const sunsetAt = data.sunTimes?.sunset ? Date.parse(`${data.date}T${data.sunTimes.sunset}:00+08:00`) : null;
+    if (now < startAt) {
+      const prefix = sunsetAt && now >= sunsetAt ? '晚霞已谢，极致蓝调倒计时' : '极致蓝调倒计时';
+      countdown.textContent = `${prefix} ${formatCountdown(startAt - now)}`;
+    } else if (now <= endAt) {
+      countdown.textContent = `蓝调进行中 · 剩余 ${formatCountdown(endAt - now)}`;
+      document.body.classList.add('blue-hour-active');
+    } else {
+      countdown.textContent = '今日蓝调已结束';
+      document.body.classList.remove('blue-hour-active');
+    }
+  };
+  update();
+  if (timelineOffsetForDate(data.date) === 0) blueHourTimer = setInterval(update, 1000);
+}
+
 function feedbackStorageKey(spot, date) {
   return `sunset-feedback:${spot}:${date}`;
 }
@@ -986,6 +1059,7 @@ function renderDetailContent(data, spotId) {
 
   renderDetailMetrics(data, score, grade, spotId);
   renderSunsetWindow(data);
+  renderBlueHour(data, spotId);
   renderWeatherDetails(data);
   renderFeedbackPanel(data, spotId);
   const bestSpot = spotId === 'xihu' ? getDynamicBestSpot(data.date) : null;
@@ -1040,6 +1114,7 @@ function renderToday(data) {
   renderProbability(document.getElementById('xihu-probability'), data);
   renderWeatherBadge(document.getElementById('xihu-day-status'), data);
   applyObservationState(document.getElementById('card-xihu'), score, data.probability);
+  scheduleBlueHourTheme(data);
 
   document.getElementById('card-xihu').setAttribute(
     'aria-label',

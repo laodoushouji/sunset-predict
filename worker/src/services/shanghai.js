@@ -10,10 +10,11 @@ const {
   sampleWeather,
 } = require('./sunset-window');
 const { fetchQWeatherHourly, mergeQWeather, qweatherConfig } = require('./qweather');
+const { buildBlueHour, getBlueHourTimes } = require('./blue-hour');
 
 const SHANGHAI_API = {
-  target: 'https://api.open-meteo.com/v1/ecmwf?latitude=31.24&longitude=121.49&hourly=temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_925hPa,relative_humidity_250hPa,precipitation,rain,weather_code&daily=sunrise,sunset&timezone=Asia%2FShanghai&forecast_days=3',
-  targetFallback: 'https://api.open-meteo.com/v1/forecast?latitude=31.24&longitude=121.49&hourly=temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_925hPa,relative_humidity_250hPa,precipitation_probability,precipitation,rain,weather_code&daily=sunrise,sunset&timezone=Asia%2FShanghai&forecast_days=3',
+  target: 'https://api.open-meteo.com/v1/ecmwf?latitude=31.24&longitude=121.49&hourly=temperature_2m,relative_humidity_2m,visibility,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_925hPa,relative_humidity_250hPa,precipitation,rain,weather_code&daily=sunrise,sunset&timezone=Asia%2FShanghai&forecast_days=3',
+  targetFallback: 'https://api.open-meteo.com/v1/forecast?latitude=31.24&longitude=121.49&hourly=temperature_2m,relative_humidity_2m,visibility,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_925hPa,relative_humidity_250hPa,precipitation_probability,precipitation,rain,weather_code&daily=sunrise,sunset&timezone=Asia%2FShanghai&forecast_days=3',
   nearWindow: 'https://api.open-meteo.com/v1/forecast?latitude=31.15&longitude=121.12&hourly=cloud_cover_low,visibility&models=gfs_seamless&timezone=Asia%2FShanghai&forecast_days=3',
   farWindow: 'https://api.open-meteo.com/v1/forecast?latitude=31.24&longitude=119.92&hourly=cloud_cover_low,visibility,relative_humidity_850hPa,relative_humidity_250hPa&models=gfs_seamless&timezone=Asia%2FShanghai&forecast_days=3',
   airQuality: token => `https://api.waqi.info/feed/shanghai/?token=${encodeURIComponent(token)}`,
@@ -98,6 +99,7 @@ function parseTarget(payload, date, hour) {
     temperature: valueAt(payload, 'temperature_2m', index),
     humidity: valueAt(payload, 'relative_humidity_2m', index),
     visibility: (valueAt(payload, 'visibility', index) || 0) / 1000,
+    cloudTotal: valueAt(payload, 'cloud_cover', index),
     cloudLow: valueAt(payload, 'cloud_cover_low', index),
     cloudMid: valueAt(payload, 'cloud_cover_mid', index),
     cloudHigh: valueAt(payload, 'cloud_cover_high', index),
@@ -238,10 +240,14 @@ async function getShanghaiData(options = {}) {
   const qweatherPayload = qweatherResult.status === 'fulfilled' ? qweatherResult.value : null;
   const dates = getForecastDates(targetPayload);
 
-  const snapshots = dates.map(date => {
+  const snapshots = dates.map((date, index) => {
     const hour = getTargetHour(date);
     const sunTimes = getSunTimes(targetPayload, date);
     const localTime = `${date}T${sunTimes?.sunset || `${String(hour).padStart(2, '0')}:00`}`;
+    const blueHourTimes = getBlueHourTimes(date, WAITAN_CONFIG.lat, WAITAN_CONFIG.lon);
+    const blueHourWeather = blueHourTimes
+      ? sampleWeather(targetPayload, `${date}T${blueHourTimes.midpoint}`, 'interpolated-from-hourly')
+      : null;
     return {
       date,
       hour,
@@ -251,6 +257,16 @@ async function getShanghaiData(options = {}) {
         '苏州窗口': farPayload ? parseWindow(farPayload, date, hour, true) : null,
       },
       sunTimes,
+      blueHour: blueHourWeather
+        ? buildBlueHour({
+          date,
+          latitude: WAITAN_CONFIG.lat,
+          longitude: WAITAN_CONFIG.lon,
+          weather: blueHourWeather,
+          airQuality: index === 0 ? airQuality : {},
+          spotId: WAITAN_CONFIG.spot,
+        })
+        : { available: false, message: '蓝调气象数据不足' },
       sunsetWindow: sunTimes
         ? buildWaitanSunsetWindow(date, sunTimes.sunset, targetPayload, nearPayload, farPayload, airQuality, qweatherPayload)
         : { available: false, message: '趋势数据不足', timeline: [] },
@@ -284,6 +300,7 @@ async function getShanghaiPrediction(options = {}) {
     date: snapshot.date,
     sunTimes: snapshot.sunTimes,
     sunsetWindow: snapshot.sunsetWindow,
+    blueHour: snapshot.blueHour,
     ...predictWaitan(snapshot.weather, snapshot.windows, data.airQuality),
   }));
   const [today] = predictions;

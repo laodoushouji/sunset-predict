@@ -186,6 +186,7 @@ function parseTarget(payload, date, hour) {
     temperature: valueAt(payload, 'temperature_2m', index),
     humidity: valueAt(payload, 'relative_humidity_2m', index),
     visibility: (valueAt(payload, 'visibility', index) || 0) / 1000,
+    cloudTotal: valueAt(payload, 'cloud_cover', index),
     cloudLow: valueAt(payload, 'cloud_cover_low', index),
     cloudMid: valueAt(payload, 'cloud_cover_mid', index),
     cloudHigh: valueAt(payload, 'cloud_cover_high', index),
@@ -286,7 +287,7 @@ async function getCityPrediction(slug, options = {}) {
 
   const windowDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
   const windowPoint = resolveWindowPoint(config, windowDate);
-  const targetFields = 'temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_direction_10m,pressure_msl,relative_humidity_925hPa,relative_humidity_700hPa,relative_humidity_250hPa,wind_speed_700hPa,precipitation_probability,precipitation,rain,weather_code';
+  const targetFields = 'temperature_2m,relative_humidity_2m,visibility,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_direction_10m,pressure_msl,relative_humidity_925hPa,relative_humidity_700hPa,relative_humidity_250hPa,wind_speed_700hPa,precipitation_probability,precipitation,rain,weather_code';
   const windowFields = 'cloud_cover_low,visibility';
   let qweatherConfigured = false;
   try {
@@ -441,7 +442,7 @@ async function getAllCityPredictions(options = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('fetch implementation is required');
   const windowDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
   const windowPoints = configs.map(config => resolveWindowPoint(config, windowDate));
-  const targetFields = 'temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_direction_10m,pressure_msl,relative_humidity_925hPa,relative_humidity_700hPa,relative_humidity_250hPa,wind_speed_700hPa,precipitation_probability,precipitation,rain,weather_code';
+  const targetFields = 'temperature_2m,relative_humidity_2m,visibility,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_direction_10m,pressure_msl,relative_humidity_925hPa,relative_humidity_700hPa,relative_humidity_250hPa,wind_speed_700hPa,precipitation_probability,precipitation,rain,weather_code';
   const windowFields = 'cloud_cover_low,visibility';
   let qweatherConfigured = false;
   try {

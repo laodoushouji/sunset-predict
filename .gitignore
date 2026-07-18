@@ -6,6 +6,7 @@
 
 # Runtime data and local tooling
 data/
+node_modules/
 .gstack/
 *.tmp
 .DS_Store

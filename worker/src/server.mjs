@@ -167,7 +167,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (url.pathname === '/health') {
-      sendJson(response, 200, { ok: true, services: ['xihu-v3', 'waitan-v4', 'regional-v3', 'qweather-weather-v1', 'timeline-v2', 'feedback-v1'] });
+      sendJson(response, 200, { ok: true, services: ['xihu-v3', 'waitan-v4', 'regional-v3', 'qweather-weather-v1', 'blue-hour-v1', 'timeline-v2', 'feedback-v1'] });
       return;
     }
 

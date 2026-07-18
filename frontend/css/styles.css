@@ -49,7 +49,18 @@ body {
   font-family: "Manrope", "Noto Sans SC", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  transition: background 1.2s ease;
 }
+
+body.blue-hour-active {
+  background:
+    radial-gradient(circle at 76% -6%, rgba(66, 105, 205, 0.32), transparent 30rem),
+    radial-gradient(circle at 18% 52%, rgba(35, 78, 156, 0.26), transparent 36rem),
+    linear-gradient(145deg, #071123 0%, #050b18 50%, #080b16 100%);
+}
+
+body.blue-hour-active .ambient::before { background: #315eb7; }
+body.blue-hour-active .ambient::after { background: #183b8a; }
 
 button,
 [role="button"] {
@@ -1507,6 +1518,105 @@ button,
   line-height: 1.6;
 }
 
+.blue-hour {
+  --blue-hour-accent: #78a9ff;
+}
+
+.blue-hour__heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.blue-hour__time {
+  color: #a9c8ff;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.blue-hour__route {
+  margin-top: 12px;
+  color: var(--faint);
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+}
+
+.blue-hour__card {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 20px;
+  margin-top: 16px;
+  padding: 20px;
+  border: 1px solid rgba(120, 169, 255, 0.2);
+  border-radius: 20px;
+  background: linear-gradient(145deg, rgba(44, 83, 155, 0.16), rgba(10, 22, 48, 0.45));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.blue-hour__score strong {
+  display: inline-block;
+  color: #b9d2ff;
+  font-size: 3.25rem;
+  font-weight: 400;
+  line-height: 0.95;
+}
+
+.blue-hour__score span {
+  color: var(--faint);
+  font-size: 0.6rem;
+}
+
+.blue-hour__score small,
+.blue-hour__components {
+  display: block;
+  margin-top: 9px;
+  color: #90b7f4;
+  font-size: 0.6rem;
+}
+
+.blue-hour__content {
+  min-width: 0;
+}
+
+.blue-hour__countdown {
+  color: rgba(255, 255, 255, 0.94);
+  font-family: "Noto Serif SC", serif;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.blue-hour__content p {
+  margin: 8px 0 12px;
+  color: var(--muted);
+  font-size: 0.67rem;
+  line-height: 1.7;
+}
+
+.blue-hour__meter {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.blue-hour__meter i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #557fd1, #9dc5ff);
+  box-shadow: 0 0 16px rgba(104, 155, 255, 0.55);
+  transition: width 700ms var(--ease-out);
+}
+
+.blue-hour__params {
+  margin-top: 10px;
+  color: rgba(195, 216, 255, 0.72);
+  font-size: 0.62rem;
+}
+
 .cloud-chart {
   display: grid;
   gap: 12px;
@@ -2201,6 +2311,16 @@ body.detail-open {
     margin-right: -18px;
     padding-right: 18px;
     scroll-snap-type: x mandatory;
+  }
+
+  .blue-hour__card {
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .blue-hour__score strong {
+    font-size: 2.8rem;
   }
 
   .camera-params > div {

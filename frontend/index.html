@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@500;600&amp;display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/styles.css?v=20260718-city-caption-align-v24">
+  <link rel="stylesheet" href="css/styles.css?v=20260718-blue-hour-v25">
 </head>
 
 <body>
@@ -223,6 +223,30 @@
               <div class="sunset-window__details" id="sunset-window-details" aria-live="polite"></div>
             </section>
 
+            <section class="detail-section blue-hour" id="blue-hour-section" aria-labelledby="blue-hour-title" hidden>
+              <div class="blue-hour__heading">
+                <div>
+                  <span class="detail__eyebrow">Blue hour</span>
+                  <h3 class="detail-section__title" id="blue-hour-title">蓝调时刻</h3>
+                </div>
+                <div class="blue-hour__time" id="blue-hour-time">--:--–--:--</div>
+              </div>
+              <div class="blue-hour__route" id="blue-hour-route">日落 → 晚霞峰值 → 极致蓝调</div>
+              <div class="blue-hour__card">
+                <div class="blue-hour__score">
+                  <strong id="blue-hour-score">--</strong><span>/ 100</span>
+                  <small id="blue-hour-label">蓝调质量</small>
+                </div>
+                <div class="blue-hour__content">
+                  <strong class="blue-hour__countdown" id="blue-hour-countdown" aria-live="polite">计算蓝调时间</strong>
+                  <p id="blue-hour-advice">正在计算城市灯光与深蓝天空的交接窗口。</p>
+                  <div class="blue-hour__meter" aria-label="蓝调质量"><i id="blue-hour-fill"></i></div>
+                  <small id="blue-hour-components">能见度 -- · 总云量 --</small>
+                </div>
+              </div>
+              <div class="blue-hour__params" id="blue-hour-params">长曝光 2–8s · ISO 100 · f/8 · 白平衡 3600K</div>
+            </section>
+
             <section class="detail-section" aria-labelledby="physics-title">
               <span class="detail__eyebrow">Physical layers</span>
               <h3 class="detail-section__title" id="physics-title">物理层拆解</h3>
@@ -416,6 +440,6 @@
   </div>
 
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-  <script src="js/app.js?v=20260717-feedback-open-v23"></script>
+  <script src="js/app.js?v=20260718-blue-hour-v25"></script>
 </body>
 </html>

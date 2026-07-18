@@ -13,9 +13,10 @@ const {
   sampleWeather,
 } = require('./sunset-window');
 const { fetchQWeatherHourly, mergeQWeather, qweatherConfig } = require('./qweather');
+const { buildBlueHour, getBlueHourTimes } = require('./blue-hour');
 
 const XIHU_API = {
-  target: 'https://api.open-meteo.com/v1/forecast?latitude=30.25&longitude=120.15&hourly=temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,relative_humidity_925hPa,relative_humidity_250hPa,precipitation_probability,precipitation,rain,weather_code&minutely_15=temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,precipitation,rain,weather_code&forecast_minutely_15=288&daily=sunrise,sunset&wind_speed_unit=ms&timezone=Asia%2FShanghai&forecast_days=3',
+  target: 'https://api.open-meteo.com/v1/forecast?latitude=30.25&longitude=120.15&hourly=temperature_2m,relative_humidity_2m,visibility,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,relative_humidity_925hPa,relative_humidity_250hPa,precipitation_probability,precipitation,rain,weather_code&minutely_15=temperature_2m,relative_humidity_2m,visibility,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,precipitation,rain,weather_code&forecast_minutely_15=288&daily=sunrise,sunset&wind_speed_unit=ms&timezone=Asia%2FShanghai&forecast_days=3',
   linan: 'https://api.open-meteo.com/v1/forecast?latitude=30.24&longitude=119.75&hourly=cloud_cover_low,visibility&timezone=Asia%2FShanghai&forecast_days=3',
   fuyang: 'https://api.open-meteo.com/v1/forecast?latitude=30.05&longitude=119.95&hourly=cloud_cover_low,visibility&timezone=Asia%2FShanghai&forecast_days=3',
   airQuality: token => `https://api.waqi.info/feed/hangzhou/?token=${encodeURIComponent(token)}`,
@@ -57,6 +58,7 @@ function parseTargetAtSunsetOffset(payload, date, offsetMinutes = -15) {
     temperature: value('temperature_2m'),
     humidity: value('relative_humidity_2m'),
     visibility: (value('visibility') || 0) / 1000,
+    cloudTotal: value('cloud_cover'),
     cloudLow: value('cloud_cover_low'),
     cloudMid: value('cloud_cover_mid'),
     cloudHigh: value('cloud_cover_high'),
@@ -79,6 +81,7 @@ function parseTarget(payload, date, hour) {
     temperature: valueAt(payload, 'temperature_2m', index),
     humidity: valueAt(payload, 'relative_humidity_2m', index),
     visibility: (valueAt(payload, 'visibility', index) || 0) / 1000,
+    cloudTotal: valueAt(payload, 'cloud_cover', index),
     cloudLow: valueAt(payload, 'cloud_cover_low', index),
     cloudMid: valueAt(payload, 'cloud_cover_mid', index),
     cloudHigh: valueAt(payload, 'cloud_cover_high', index),
@@ -181,13 +184,17 @@ async function getXihuData(options = {}) {
   const airQuality = parseAirQuality(airResult.status === 'fulfilled' ? airResult.value : null);
   const qweatherPayload = qweatherResult.status === 'fulfilled' ? qweatherResult.value : null;
   const dates = getForecastDates(targetPayload);
-  const snapshots = dates.map(date => {
+  const snapshots = dates.map((date, index) => {
     const dailyIndex = targetPayload?.daily?.time?.indexOf(date) ?? -1;
     const sunset = dailyIndex >= 0 ? targetPayload.daily.sunset?.[dailyIndex] : null;
     const hour = sunset ? Number(sunset.slice(11, 13)) : getTargetHour(date);
     const minutelyWeather = parseTargetAtSunsetOffset(targetPayload, date, -15);
     const hourlyWeather = parseTarget(targetPayload, date, hour);
     const effectiveTime = sunset ? subtractMinutes(sunset, 15) : `${date}T${String(hour).padStart(2, '0')}:00`;
+    const blueHourTimes = getBlueHourTimes(date, XIHU_CONFIG.lat, XIHU_CONFIG.lon);
+    const blueHourWeather = blueHourTimes
+      ? sampleWeather(targetPayload, `${date}T${blueHourTimes.midpoint}`, minutelyWeather ? 'native-15m' : 'interpolated-from-hourly')
+      : null;
     const openMeteoWeather = minutelyWeather
       ? {
         ...hourlyWeather,
@@ -203,6 +210,16 @@ async function getXihuData(options = {}) {
         '富阳': fuyangPayload ? parseWindow(fuyangPayload, date, hour) : null,
       },
       sunTimes: getSunTimes(targetPayload, date),
+      blueHour: blueHourWeather
+        ? buildBlueHour({
+          date,
+          latitude: XIHU_CONFIG.lat,
+          longitude: XIHU_CONFIG.lon,
+          weather: blueHourWeather,
+          airQuality: index === 0 ? airQuality : {},
+          spotId: XIHU_CONFIG.spot,
+        })
+        : { available: false, message: '蓝调气象数据不足' },
       sunsetWindow: sunset
         ? buildXihuSunsetWindow(date, sunset.slice(11, 16), targetPayload, linanPayload, fuyangPayload, airQuality, qweatherPayload)
         : { available: false, message: '趋势数据不足', timeline: [] },
@@ -236,6 +253,7 @@ async function getXihuPrediction(options = {}) {
     sunTimes: snapshot.sunTimes,
     dataResolution: snapshot.dataResolution,
     sunsetWindow: snapshot.sunsetWindow,
+    blueHour: snapshot.blueHour,
     metrics: {
       cloudLow: snapshot.weather.cloudLow,
       cloudMid: snapshot.weather.cloudMid,
