@@ -75,7 +75,7 @@ async function saveHistoryDay(root, day) {
   const snapshot = {
     ...day,
     schemaVersion: 2,
-    modelVersion: 'quality-v3',
+    modelVersion: day.xihu?.modelVersion || 'legacy',
     calibration: buildCalibrationSnapshot(day),
     offset: -1,
     recorded: true,

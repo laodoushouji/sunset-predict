@@ -89,18 +89,19 @@ test('V3 同时输出原始物理分与当前展示分', () => {
   assert.equal(result.components.quality, result.quality);
 });
 
-test('阴天厚云幕不得进入 GREAT 或 FIRE', () => {
-  for (const spotId of ['xihu', 'waitan', 'beijing', 'erhai', 'chongqing', 'xiamen', 'qingdao', 'chengdu', 'shenzhen', 'huangshan']) {
-    const result = calculateSunsetScore(
-      spotId,
-      { ...baseWeather, cloudHigh: 85, cloudMid: 85, weatherCode: 3 },
-      { cloudLow: 5 }
-    );
-    assert.equal(result.weather.label, '阴');
-    assert.ok(result.quality <= 59, `${spotId} 阴天质量分不应为 ${result.quality}`);
-    assert.ok(['CLEAR', 'FAIR'].includes(result.grade));
-    assert.ok(result.corrections.some(item => item.item === '阴天厚云上限'));
-  }
+test('阴天使用连续光学厚度衰减，不再堆积为固定59分', () => {
+  const coverages = [55, 70, 85, 100];
+  const results = coverages.map(cloud => calculateSunsetScore(
+    'xihu',
+    { ...baseWeather, cloudHigh: cloud, cloudMid: cloud, weatherCode: 3 },
+    { cloudLow: 5 }
+  ));
+
+  assert.equal(new Set(results.map(result => result.quality)).size, results.length);
+  assert.equal(results.every(result => result.weather.label === '阴'), true);
+  assert.equal(results.every(result => result.quality < 60), true);
+  assert.equal(results.every(result => result.components.overcastOpacityFactor < 1), true);
+  assert.equal(results.every(result => result.corrections.some(item => item.item === '阴天光学厚度')), true);
 });
 
 test('等级边界返回 NONE/CLEAR/FAIR/GREAT/FIRE', () => {
@@ -159,7 +160,7 @@ test('西湖大雨将质量分与观测成功率归零，微雨只压低成功�
   );
 
   assert.equal(overcast.probability, dry.probability);
-  assert.ok(overcast.score <= 59);
+  assert.ok(overcast.score < dry.score);
   assert.equal(drizzle.score, dry.score);
   assert.ok(drizzle.probability <= 10);
   assert.equal(rain.score, 0);

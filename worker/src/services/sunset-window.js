@@ -184,7 +184,6 @@ function enforceHardRules(node) {
     probability = 0;
   }
   if (metrics.cloudHigh < 10) quality = Math.min(quality, 30);
-  if (node.weather?.kind === 'overcast') quality = Math.min(quality, 59);
   if (metrics.remoteLowCloud > 80) probability = Math.min(probability, 9);
   if (correctionNames.has('身在雾中') || correctionNames.has('低云雾中')) probability = 0;
   if (metrics.cloudLow > 95 || metrics.humidity925 > 95) {

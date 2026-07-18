@@ -140,6 +140,14 @@ function canvasPoints(coverage) {
   return base * thicknessFactor;
 }
 
+function overcastTransmission(canvasCoverage, humidity250) {
+  const coverageRisk = clamp((canvasCoverage - 40) / 60, 0, 1);
+  const upperMoistureRisk = Number.isFinite(humidity250)
+    ? clamp((humidity250 - 85) / 15, 0, 1)
+    : 0;
+  return clamp(0.76 - coverageRisk * 0.2 - upperMoistureRisk * 0.12, 0.44, 0.76);
+}
+
 function calibrateQuality(rawQuality) {
   return Math.round(clamp(rawQuality));
 }
@@ -180,6 +188,7 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
   let score = 0;
   let sceneBonus = 0;
   let qualityAdjustment = 0;
+  let overcastOpacityFactor = 1;
 
   const addSceneBonus = (requested, item, desc) => {
     const awarded = Math.max(0, Math.min(requested, 10 - sceneBonus));
@@ -375,12 +384,15 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
   const precipitationProbability = Number.isFinite(weatherMeta.precipitationProbability)
     ? `，降水概率${weatherMeta.precipitationProbability}%`
     : '';
-  if (weatherMeta.kind === 'overcast' && score > 59) {
-    score = 59;
+  if (weatherMeta.kind === 'overcast') {
+    overcastOpacityFactor = overcastTransmission(canvasCoverage, weather.humidity250);
+    const scoreBeforeOpacity = score;
+    score *= overcastOpacityFactor;
+    const opacityPenalty = Math.max(0, Math.round(scoreBeforeOpacity - score));
     corrections.push({
-      item: '阴天厚云上限',
-      value: '≤59',
-      desc: '天气代码判定为阴，厚云幕下不进入高质量晚霞等级',
+      item: '阴天光学厚度',
+      value: `-${opacityPenalty}`,
+      desc: `中高云覆盖${Math.round(canvasCoverage)}%，高空湿度${Number.isFinite(weather.humidity250) ? `${Math.round(weather.humidity250)}%` : '数据不足'}，透光系数${overcastOpacityFactor.toFixed(2)}`,
     });
   }
   if (weatherMeta.blocksSunset) {
@@ -427,6 +439,7 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
       canvasCoverage: Math.round(canvasCoverage),
       canvasPoints: Math.round(canvas),
       thicknessFactor: Math.round(thicknessFactor * 100) / 100,
+      overcastOpacityFactor: Math.round(overcastOpacityFactor * 100) / 100,
       filterPoints: Math.round(filter),
       sceneBonus,
       qualityAdjustment,
@@ -464,7 +477,7 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
     colorOverride,
     corrections,
     dataAvailability,
-    modelVersion: 'quality-v3',
+    modelVersion: 'quality-v3.1',
     timeOffsetMinutes: normalizedSpotId === 'xihu' ? -15 : 0,
     afterglowDecay: normalizedSpotId === 'qingdao' && weather.cloudHigh > 60 ? 'slow' : 'normal',
   };

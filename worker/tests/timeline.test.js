@@ -25,6 +25,7 @@ function prediction(spot, dates) {
     components: { canvasPoints: 38, filterPoints: 16, sceneBonus: 0 },
     corrections: [],
     photographyAdvice: `${spot}-${index}`,
+    modelVersion: 'quality-v3.1',
     source: `${spot}-model-v3`,
   }));
   return { spot, days, forecast: days.map(({ date, quality }) => ({ date, quality })) };
@@ -74,7 +75,7 @@ test('历史快照跨请求保存，并作为昨天插入时间线', async t => 
   assert.equal(savedToday.date, dates[0]);
   assert.equal(savedToday.recorded, true);
   assert.equal(savedToday.schemaVersion, 2);
-  assert.equal(savedToday.modelVersion, 'quality-v3');
+  assert.equal(savedToday.modelVersion, 'quality-v3.1');
   assert.equal(savedToday.calibration.xihu.inputs.metrics.cloudHigh, 50);
   assert.equal(savedToday.calibration.xihu.inputs.model.remoteWindow.cloudLow, 20);
   assert.equal(savedToday.calibration.xihu.outputs.rawQuality, 50);
