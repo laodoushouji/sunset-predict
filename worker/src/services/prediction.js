@@ -43,6 +43,7 @@ function getWeatherMeta(weather = {}) {
     ? Math.round(clamp(weather.precipitationProbability))
     : null;
   const weatherCode = Number.isFinite(Number(weather.weatherCode)) ? Number(weather.weatherCode) : null;
+  const weatherText = typeof weather.weatherText === 'string' ? weather.weatherText.trim() : '';
   const rainCodes = new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82]);
   const mediumRainCodes = new Set([63, 81]);
   const heavyRainCodes = new Set([65, 67, 82]);
@@ -54,37 +55,37 @@ function getWeatherMeta(weather = {}) {
 
   let label = '天气待更新';
   let kind = 'unknown';
-  if (thunderCodes.has(weatherCode)) {
+  if (weatherText.includes('雷') || thunderCodes.has(weatherCode)) {
     label = '雷雨';
     kind = 'thunder';
-  } else if ((rate !== null && rate >= 7.6) || heavyRainCodes.has(weatherCode)) {
+  } else if ((rate !== null && rate >= 7.6) || /(特大暴雨|大暴雨|暴雨|大雨)/.test(weatherText) || heavyRainCodes.has(weatherCode)) {
     label = '大雨';
     kind = 'rain-heavy';
-  } else if ((rate !== null && rate >= 2.5) || mediumRainCodes.has(weatherCode)) {
+  } else if ((rate !== null && rate >= 2.5) || weatherText.includes('中雨') || mediumRainCodes.has(weatherCode)) {
     label = '中雨';
     kind = 'rain-medium';
-  } else if ((rate !== null && rate >= 0.1) || rainCodes.has(weatherCode)) {
+  } else if ((rate !== null && rate >= 0.1) || weatherText.includes('雨') || rainCodes.has(weatherCode)) {
     label = '小雨';
     kind = 'rain-light';
-  } else if (heavySnowCodes.has(weatherCode)) {
+  } else if (/(暴雪|大雪)/.test(weatherText) || heavySnowCodes.has(weatherCode)) {
     label = '大雪';
     kind = 'snow-heavy';
-  } else if (mediumSnowCodes.has(weatherCode)) {
+  } else if (weatherText.includes('中雪') || mediumSnowCodes.has(weatherCode)) {
     label = '中雪';
     kind = 'snow-medium';
-  } else if (snowCodes.has(weatherCode)) {
+  } else if (weatherText.includes('雪') || snowCodes.has(weatherCode)) {
     label = '小雪';
     kind = 'snow-light';
-  } else if ([45, 48].includes(weatherCode)) {
+  } else if (/[雾霾沙尘]/.test(weatherText) || [45, 48].includes(weatherCode)) {
     label = '雾';
     kind = 'fog';
-  } else if (weatherCode === 3) {
+  } else if (weatherText.includes('阴') || weatherCode === 3) {
     label = '阴';
     kind = 'overcast';
-  } else if ([1, 2].includes(weatherCode)) {
+  } else if (weatherText.includes('云') || [1, 2].includes(weatherCode)) {
     label = '多云';
     kind = 'cloudy';
-  } else if (weatherCode === 0) {
+  } else if (weatherText.includes('晴') || weatherCode === 0) {
     label = '晴';
     kind = 'clear';
   }
@@ -93,6 +94,8 @@ function getWeatherMeta(weather = {}) {
     label,
     kind,
     weatherCode,
+    weatherText: weatherText || null,
+    source: weather.weatherProvider || 'open-meteo',
     precipitationRateMmH: rate,
     precipitationProbability,
     isPrecipitating: kind.startsWith('rain-') || kind.startsWith('snow-') || kind === 'thunder',

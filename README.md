@@ -8,7 +8,7 @@
 
 - 前端：原生 HTML、CSS、JavaScript，Lucide Icons。
 - 后端：Node.js HTTP 服务，监听 `127.0.0.1:3003`。
-- 数据：Open-Meteo 气象格点，可选 WAQI 空气质量。
+- 数据：Open-Meteo 提供云量、能见度等物理格点；QWeather 提供天气现象与小时降水；WAQI 空气质量可选。
 - 部署：阿里云香港服务器，Nginx、systemd、HTTPS。
 - 持久化：历史快照位于 `/var/lib/sunset-predict/history`，匿名实况反馈位于 `/var/lib/sunset-predict/feedback`，全国站最近成功快照位于 `/var/lib/sunset-predict/cache`。
 
@@ -19,7 +19,7 @@
 ```bash
 # 环境变量
 cp worker/.dev.vars.example .env
-# 按需填写 WAQI_TOKEN，禁止提交真实 Token
+# 填写 QWeather 配置；WAQI_TOKEN 按需填写，禁止提交真实 Token
 
 # 启动完整前后端
 set -a
@@ -54,6 +54,8 @@ node --test worker/tests/*.test.js
 
 | 名称 | 用途 |
 |---|---|
+| `QWEATHER_API_HOST` | QWeather 控制台分配的专属 API Host，不含协议 |
+| `QWEATHER_API_KEY` | QWeather API Key；兼容读取 `QWEATHER_KEY`、`HEWEATHER_KEY` |
 | `WAQI_TOKEN` | WAQI 空气质量接口 Token，可选 |
 | `PORT` | Node 监听端口，本地默认 3001，生产为 3003 |
 | `APP_ROOT` | 项目根目录 |

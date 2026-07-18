@@ -117,6 +117,13 @@ test('全站天气统一区分晴、小雨、中雨、大雨与雷雨', () => {
   assert.equal(getWeatherMeta({ weatherCode: 63, precipitationRate: 3 }).label, '中雨');
   assert.equal(getWeatherMeta({ weatherCode: 65, precipitationRate: 8 }).label, '大雨');
   assert.equal(getWeatherMeta({ weatherCode: 95, precipitationRate: 1 }).label, '雷雨');
+  assert.deepEqual(
+    {
+      label: getWeatherMeta({ weatherText: '中雨', weatherProvider: 'qweather', precipitationRate: 0 }).label,
+      source: getWeatherMeta({ weatherText: '中雨', weatherProvider: 'qweather', precipitationRate: 0 }).source,
+    },
+    { label: '中雨', source: 'qweather' }
+  );
 
   for (const spotId of ['xihu', 'waitan', 'beijing', 'erhai', 'chongqing', 'xiamen', 'qingdao', 'chengdu', 'shenzhen', 'huangshan']) {
     const rain = calculateSunsetScore(

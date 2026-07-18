@@ -16,6 +16,7 @@ const {
   sampleRemote,
   sampleWeather,
 } = require('./sunset-window');
+const { fetchQWeatherHourly, mergeQWeather, qweatherConfig } = require('./qweather');
 
 const CITY_SPOTS = {
   beijing: {
@@ -287,20 +288,34 @@ async function getCityPrediction(slug, options = {}) {
   const windowPoint = resolveWindowPoint(config, windowDate);
   const targetFields = 'temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_direction_10m,pressure_msl,relative_humidity_925hPa,relative_humidity_700hPa,relative_humidity_250hPa,wind_speed_700hPa,precipitation_probability,precipitation,rain,weather_code';
   const windowFields = 'cloud_cover_low,visibility';
-  const [targetPayload, windowPayload] = await Promise.all([
+  let qweatherConfigured = false;
+  try {
+    qweatherConfigured = Boolean(qweatherConfig(options));
+  } catch {
+    qweatherConfigured = true;
+  }
+  const [targetPayload, windowPayload, qweatherResult] = await Promise.all([
     fetchJson(forecastUrl(config.target, targetFields, true, true), fetchImpl, options.timeoutMs, options.retryOptions),
     fetchJson(forecastUrl(windowPoint, windowFields), fetchImpl, options.timeoutMs, options.retryOptions),
+    fetchQWeatherHourly(config.target, { ...options, fetchImpl })
+      .then(value => ({ value }))
+      .catch(() => ({ value: null })),
   ]);
-  return buildCityPrediction(config, targetPayload, windowPayload, windowPoint, options);
+  return buildCityPrediction(config, targetPayload, windowPayload, windowPoint, {
+    ...options,
+    qweatherConfigured,
+    qweatherPayload: qweatherResult.value,
+  });
 }
 
 function buildCityPrediction(config, targetPayload, windowPayload, windowPoint, options = {}) {
   const dates = targetPayload?.daily?.time?.slice(0, 3) || getForecastDates(targetPayload);
   const predictions = dates.map(date => {
     const hour = targetHour(targetPayload, date);
-    const weather = parseTarget(targetPayload, date, hour);
-    const westernWeather = parseWindow(windowPayload, date, hour);
     const sunTimes = getSunTimes(targetPayload, date);
+    const localTime = `${date}T${sunTimes?.sunset || `${String(hour).padStart(2, '0')}:00`}`;
+    const weather = mergeQWeather(parseTarget(targetPayload, date, hour), options.qweatherPayload, localTime);
+    const westernWeather = parseWindow(windowPayload, date, hour);
     if (!weather) return null;
     return {
       date,
@@ -312,7 +327,11 @@ function buildCityPrediction(config, targetPayload, windowPayload, windowPoint, 
           resolution: 'interpolated-from-hourly',
           slowAfterglow: ['qingdao', 'huangshan'].includes(config.spot),
           evaluateNode(localTime) {
-            const nodeWeather = sampleWeather(targetPayload, localTime, 'interpolated-from-hourly');
+            const nodeWeather = mergeQWeather(
+              sampleWeather(targetPayload, localTime, 'interpolated-from-hourly'),
+              options.qweatherPayload,
+              localTime
+            );
             const nodeWindow = sampleRemote(windowPayload, localTime);
             if (![nodeWeather?.cloudHigh, nodeWeather?.cloudMid, nodeWeather?.cloudLow, nodeWeather?.visibility, nodeWindow?.cloudLow].every(Number.isFinite)) {
               return null;
@@ -359,6 +378,9 @@ function buildCityPrediction(config, targetPayload, windowPayload, windowPoint, 
     sourceStatus: {
       openMeteo: 'connected',
       westernWindow: 'connected',
+      qweather: !options.qweatherConfigured
+        ? 'not-configured'
+        : options.qweatherPayload ? 'connected' : 'unavailable',
       precipitation: predictions.some(prediction => Number.isFinite(prediction.metrics.precipitationRateMmH))
         ? 'connected'
         : 'unavailable',
@@ -421,22 +443,36 @@ async function getAllCityPredictions(options = {}) {
   const windowPoints = configs.map(config => resolveWindowPoint(config, windowDate));
   const targetFields = 'temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_direction_10m,pressure_msl,relative_humidity_925hPa,relative_humidity_700hPa,relative_humidity_250hPa,wind_speed_700hPa,precipitation_probability,precipitation,rain,weather_code';
   const windowFields = 'cloud_cover_low,visibility';
+  let qweatherConfigured = false;
+  try {
+    qweatherConfigured = Boolean(qweatherConfig(options));
+  } catch {
+    qweatherConfigured = true;
+  }
 
   try {
-    const [targetBatch, windowBatch] = await Promise.all([
+    const [targetBatch, windowBatch, qweatherResults] = await Promise.all([
       fetchJson(forecastUrl(configs.map(config => config.target), targetFields, true, true), fetchImpl, options.timeoutMs, options.retryOptions),
       fetchJson(forecastUrl(windowPoints, windowFields), fetchImpl, options.timeoutMs, options.retryOptions),
+      Promise.allSettled(configs.map(config => fetchQWeatherHourly(config.target, { ...options, fetchImpl }))),
     ]);
     const targetPayloads = normalizeBatchPayload(targetBatch, entries.length);
     const windowPayloads = normalizeBatchPayload(windowBatch, entries.length);
     const result = {
-      spots: configs.map((config, index) => buildCityPrediction(
-        config,
-        targetPayloads[index],
-        windowPayloads[index],
-        windowPoints[index],
-        options
-      )),
+      spots: configs.map((config, index) => {
+        const qweatherResult = qweatherResults[index];
+        return buildCityPrediction(
+          config,
+          targetPayloads[index],
+          windowPayloads[index],
+          windowPoints[index],
+          {
+            ...options,
+            qweatherConfigured,
+            qweatherPayload: qweatherResult?.status === 'fulfilled' ? qweatherResult.value : null,
+          }
+        );
+      }),
       fetchedAt: new Date().toISOString(),
       cacheStatus: 'live',
     };

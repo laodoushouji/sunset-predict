@@ -12,6 +12,7 @@ const {
   sampleRemote,
   sampleWeather,
 } = require('./sunset-window');
+const { fetchQWeatherHourly, mergeQWeather, qweatherConfig } = require('./qweather');
 
 const XIHU_API = {
   target: 'https://api.open-meteo.com/v1/forecast?latitude=30.25&longitude=120.15&hourly=temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,relative_humidity_925hPa,relative_humidity_250hPa,precipitation_probability,precipitation,rain,weather_code&minutely_15=temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,precipitation,rain,weather_code&forecast_minutely_15=288&daily=sunrise,sunset&wind_speed_unit=ms&timezone=Asia%2FShanghai&forecast_days=3',
@@ -116,14 +117,18 @@ function getSunTimes(payload, date) {
   };
 }
 
-function buildXihuSunsetWindow(date, sunset, targetPayload, linanPayload, fuyangPayload, airQuality) {
+function buildXihuSunsetWindow(date, sunset, targetPayload, linanPayload, fuyangPayload, airQuality, qweatherPayload = null) {
   return buildSunsetWindow({
     date,
     sunset,
     effectiveOffsetMinutes: -15,
     resolution: 'native-15m',
     evaluateNode(localTime) {
-      const weather = sampleWeather(targetPayload, localTime, 'native-15m');
+      const weather = mergeQWeather(
+        sampleWeather(targetPayload, localTime, 'native-15m'),
+        qweatherPayload,
+        localTime
+      );
       const linan = sampleRemote(linanPayload, localTime);
       const fuyang = sampleRemote(fuyangPayload, localTime);
       if (![weather?.cloudHigh, weather?.cloudMid, weather?.cloudLow, weather?.visibility, linan?.cloudLow].every(Number.isFinite)) {
@@ -154,19 +159,27 @@ async function getXihuData(options = {}) {
   const waqiToken = options.waqiToken || (typeof process !== 'undefined' ? process.env.WAQI_TOKEN : undefined);
   if (typeof fetchImpl !== 'function') throw new Error('fetch implementation is required');
 
+  let qweatherConfigured = false;
+  try {
+    qweatherConfigured = Boolean(qweatherConfig(options));
+  } catch {
+    qweatherConfigured = true;
+  }
   const results = await Promise.allSettled([
     fetchJson(XIHU_API.target, fetchImpl),
     fetchJson(XIHU_API.linan, fetchImpl),
     fetchJson(XIHU_API.fuyang, fetchImpl),
     waqiToken ? fetchJson(XIHU_API.airQuality(waqiToken), fetchImpl) : Promise.resolve(null),
+    fetchQWeatherHourly({ lat: XIHU_CONFIG.lat, lon: XIHU_CONFIG.lon }, { ...options, fetchImpl }),
   ]);
-  const [targetResult, linanResult, fuyangResult, airResult] = results;
+  const [targetResult, linanResult, fuyangResult, airResult, qweatherResult] = results;
   if (targetResult.status === 'rejected') throw new Error(`西湖主数据获取失败: ${targetResult.reason.message}`);
 
   const targetPayload = targetResult.value;
   const linanPayload = linanResult.status === 'fulfilled' ? linanResult.value : null;
   const fuyangPayload = fuyangResult.status === 'fulfilled' ? fuyangResult.value : null;
   const airQuality = parseAirQuality(airResult.status === 'fulfilled' ? airResult.value : null);
+  const qweatherPayload = qweatherResult.status === 'fulfilled' ? qweatherResult.value : null;
   const dates = getForecastDates(targetPayload);
   const snapshots = dates.map(date => {
     const dailyIndex = targetPayload?.daily?.time?.indexOf(date) ?? -1;
@@ -174,14 +187,16 @@ async function getXihuData(options = {}) {
     const hour = sunset ? Number(sunset.slice(11, 13)) : getTargetHour(date);
     const minutelyWeather = parseTargetAtSunsetOffset(targetPayload, date, -15);
     const hourlyWeather = parseTarget(targetPayload, date, hour);
+    const effectiveTime = sunset ? subtractMinutes(sunset, 15) : `${date}T${String(hour).padStart(2, '0')}:00`;
+    const openMeteoWeather = minutelyWeather
+      ? {
+        ...hourlyWeather,
+        ...Object.fromEntries(Object.entries(minutelyWeather).filter(([, value]) => value !== null)),
+      }
+      : hourlyWeather;
     return {
       date,
-      weather: minutelyWeather
-        ? {
-          ...hourlyWeather,
-          ...Object.fromEntries(Object.entries(minutelyWeather).filter(([, value]) => value !== null)),
-        }
-        : hourlyWeather,
+      weather: mergeQWeather(openMeteoWeather, qweatherPayload, effectiveTime),
       dataResolution: minutelyWeather ? '15-minute-interpolated' : 'hourly-fallback',
       windows: {
         '临安': linanPayload ? parseWindow(linanPayload, date, hour) : null,
@@ -189,7 +204,7 @@ async function getXihuData(options = {}) {
       },
       sunTimes: getSunTimes(targetPayload, date),
       sunsetWindow: sunset
-        ? buildXihuSunsetWindow(date, sunset.slice(11, 16), targetPayload, linanPayload, fuyangPayload, airQuality)
+        ? buildXihuSunsetWindow(date, sunset.slice(11, 16), targetPayload, linanPayload, fuyangPayload, airQuality, qweatherPayload)
         : { available: false, message: '趋势数据不足', timeline: [] },
     };
   }).filter(snapshot => snapshot.weather);
@@ -203,6 +218,7 @@ async function getXihuData(options = {}) {
       linanWindow: linanResult.status === 'fulfilled' ? 'connected' : 'unavailable',
       fuyangWindow: fuyangResult.status === 'fulfilled' ? 'connected' : 'unavailable',
       waqi: !waqiToken ? 'not-configured' : airQuality.available ? 'connected' : 'unavailable',
+      qweather: !qweatherConfigured ? 'not-configured' : qweatherPayload ? 'connected' : 'unavailable',
       precipitation: snapshots.some(snapshot => Number.isFinite(snapshot.weather.precipitationRate))
         ? 'connected'
         : 'unavailable',

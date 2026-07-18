@@ -9,6 +9,7 @@ const {
   sampleRemote,
   sampleWeather,
 } = require('./sunset-window');
+const { fetchQWeatherHourly, mergeQWeather, qweatherConfig } = require('./qweather');
 
 const SHANGHAI_API = {
   target: 'https://api.open-meteo.com/v1/ecmwf?latitude=31.24&longitude=121.49&hourly=temperature_2m,relative_humidity_2m,visibility,cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_925hPa,relative_humidity_250hPa,precipitation,rain,weather_code&daily=sunrise,sunset&timezone=Asia%2FShanghai&forecast_days=3',
@@ -157,13 +158,17 @@ function getSunTimes(payload, date) {
   };
 }
 
-function buildWaitanSunsetWindow(date, sunset, targetPayload, nearPayload, farPayload, airQuality) {
+function buildWaitanSunsetWindow(date, sunset, targetPayload, nearPayload, farPayload, airQuality, qweatherPayload = null) {
   return buildSunsetWindow({
     date,
     sunset,
     resolution: 'interpolated-from-hourly',
     evaluateNode(localTime) {
-      const weather = sampleWeather(targetPayload, localTime, 'interpolated-from-hourly');
+      const weather = mergeQWeather(
+        sampleWeather(targetPayload, localTime, 'interpolated-from-hourly'),
+        qweatherPayload,
+        localTime
+      );
       const near = sampleRemote(nearPayload, localTime);
       const far = sampleRemote(farPayload, localTime);
       if (![weather?.cloudHigh, weather?.cloudMid, weather?.cloudLow, weather?.visibility, far?.cloudLow].every(Number.isFinite)) {
@@ -198,6 +203,12 @@ async function getShanghaiData(options = {}) {
   const waqiToken = options.waqiToken || (typeof process !== 'undefined' ? process.env.WAQI_TOKEN : undefined);
   if (typeof fetchImpl !== 'function') throw new Error('fetch implementation is required');
 
+  let qweatherConfigured = false;
+  try {
+    qweatherConfigured = Boolean(qweatherConfig(options));
+  } catch {
+    qweatherConfigured = true;
+  }
   const requests = [
     fetchJson(SHANGHAI_API.target, fetchImpl),
     fetchJson(SHANGHAI_API.nearWindow, fetchImpl),
@@ -205,8 +216,9 @@ async function getShanghaiData(options = {}) {
     waqiToken
       ? fetchJson(SHANGHAI_API.airQuality(waqiToken), fetchImpl)
       : Promise.resolve(null),
+    fetchQWeatherHourly({ lat: WAITAN_CONFIG.lat, lon: WAITAN_CONFIG.lon }, { ...options, fetchImpl }),
   ];
-  const [targetResult, nearResult, farResult, airResult] = await Promise.allSettled(requests);
+  const [targetResult, nearResult, farResult, airResult, qweatherResult] = await Promise.allSettled(requests);
   const fallbackResult = await fetchJson(SHANGHAI_API.targetFallback, fetchImpl)
     .then(value => ({ status: 'fulfilled', value }))
     .catch(reason => ({ status: 'rejected', reason }));
@@ -223,22 +235,24 @@ async function getShanghaiData(options = {}) {
   const farPayload = farResult.status === 'fulfilled' ? farResult.value : null;
   const airPayload = airResult.status === 'fulfilled' ? airResult.value : null;
   const airQuality = parseAirQuality(airPayload);
+  const qweatherPayload = qweatherResult.status === 'fulfilled' ? qweatherResult.value : null;
   const dates = getForecastDates(targetPayload);
 
   const snapshots = dates.map(date => {
     const hour = getTargetHour(date);
     const sunTimes = getSunTimes(targetPayload, date);
+    const localTime = `${date}T${sunTimes?.sunset || `${String(hour).padStart(2, '0')}:00`}`;
     return {
       date,
       hour,
-      weather: parseTarget(targetPayload, date, hour),
+      weather: mergeQWeather(parseTarget(targetPayload, date, hour), qweatherPayload, localTime),
       windows: {
         '青浦窗口': nearPayload ? parseWindow(nearPayload, date, hour) : null,
         '苏州窗口': farPayload ? parseWindow(farPayload, date, hour, true) : null,
       },
       sunTimes,
       sunsetWindow: sunTimes
-        ? buildWaitanSunsetWindow(date, sunTimes.sunset, targetPayload, nearPayload, farPayload, airQuality)
+        ? buildWaitanSunsetWindow(date, sunTimes.sunset, targetPayload, nearPayload, farPayload, airQuality, qweatherPayload)
         : { available: false, message: '趋势数据不足', timeline: [] },
     };
   }).filter(snapshot => snapshot.weather);
@@ -253,6 +267,7 @@ async function getShanghaiData(options = {}) {
       nearWindow: nearResult.status === 'fulfilled' ? 'connected' : 'unavailable',
       farWindow: farResult.status === 'fulfilled' ? 'connected' : 'unavailable',
       waqi: !waqiToken ? 'not-configured' : airQuality.available ? 'connected' : 'unavailable',
+      qweather: !qweatherConfigured ? 'not-configured' : qweatherPayload ? 'connected' : 'unavailable',
       precipitation: snapshots.some(snapshot => Number.isFinite(snapshot.weather.precipitationRate))
         ? 'connected'
         : 'unavailable',
