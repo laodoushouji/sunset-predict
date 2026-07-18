@@ -961,6 +961,7 @@ button,
 
 .city-card__content {
   display: flex;
+  height: 100%;
   min-height: inherit;
   padding: 24px;
   flex-direction: column;
