@@ -862,8 +862,6 @@ function renderBlueHour(data, spotId) {
   }
 
   section.hidden = false;
-  document.getElementById('blue-hour-time').textContent = `${blueHour.start}–${blueHour.end}`;
-  document.getElementById('blue-hour-route').textContent = `日落 ${data.sunTimes?.sunset || '--:--'} → 晚霞峰值 ${data.sunsetWindow?.peakTime || '--:--'} → 极致蓝调 ${blueHour.start}`;
   document.getElementById('blue-hour-score').textContent = Math.round(blueHour.score);
   document.getElementById('blue-hour-label').textContent = blueHour.label;
   document.getElementById('blue-hour-advice').textContent = blueHour.advice;
@@ -1070,10 +1068,16 @@ function renderDetailContent(data, spotId) {
   bestSpotElement.textContent = bestSpotText;
   bestSpotElement.title = bestSpot?.azimuth ? `${dayLabel}日落方位角 ${bestSpot.azimuth}°` : '';
 
-  const sunText = data.sunTimes?.sunset
-    ? `${data.sunTimes.sunset}${Number.isFinite(data.sunTimes.dayLength) ? ` · ${data.sunTimes.dayLength}min` : ''}`
-    : data.lightsOn ? `${data.lightsOn} 亮灯` : '日落时刻待更新';
-  document.getElementById('sunset-time').textContent = sunText;
+  const sunsetTime = data.sunTimes?.sunset || '--:--';
+  const hasBlueHour = ['xihu', 'waitan'].includes(spotId) && data.blueHour?.available;
+  const heroBlueHour = document.getElementById('hero-blue-hour');
+  const timelineConnector = document.getElementById('light-timeline-connector');
+  document.getElementById('sunset-time').textContent = sunsetTime;
+  heroBlueHour.hidden = !hasBlueHour;
+  timelineConnector.hidden = !hasBlueHour;
+  if (hasBlueHour) {
+    document.getElementById('hero-blue-hour-time').textContent = `${data.blueHour.start}–${data.blueHour.end}`;
+  }
   document.getElementById('color-desc').textContent = data.color?.desc || data.color?.label || '--';
   document.getElementById('confidence').textContent = CONF_MAP[data.confidence] || data.confidence || '--';
   renderCorrections(data.corrections || []);

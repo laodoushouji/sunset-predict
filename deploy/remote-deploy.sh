@@ -174,7 +174,7 @@ grep -q "全国摄影站" /tmp/sunset-v2-public-index.html
 grep -q "detail-overlay" /tmp/sunset-v2-public-index.html
 grep -q "物理层拆解" /tmp/sunset-v2-public-index.html
 grep -q "作者碎碎念" /tmp/sunset-v2-public-index.html
-grep -q "20260718-blue-hour-v25" /tmp/sunset-v2-public-index.html
+grep -q "20260718-light-timeline-v26" /tmp/sunset-v2-public-index.html
 grep -q 'id="sunset-window-track"' /tmp/sunset-v2-public-index.html
 grep -q 'id="sunset-window-details"' /tmp/sunset-v2-public-index.html
 grep -q 'id="feedback-title"' /tmp/sunset-v2-public-index.html
@@ -186,6 +186,7 @@ grep -q 'id="weather-condition"' /tmp/sunset-v2-public-index.html
 grep -q 'id="weather-precipitation"' /tmp/sunset-v2-public-index.html
 grep -q 'id="blue-hour-section"' /tmp/sunset-v2-public-index.html
 grep -q 'id="blue-hour-countdown"' /tmp/sunset-v2-public-index.html
+grep -q 'id="hero-blue-hour-time"' /tmp/sunset-v2-public-index.html
 "$node_bin" -e "const h=require('fs').readFileSync('/tmp/sunset-v2-public-index.html','utf8');const h1=h.match(/<h1\\b/g)||[];if(h1.length!==1||!/<h1 class=\"score\"[^>]*>[\\s\\S]*?id=\"score-value\"[\\s\\S]*?<\\/h1>/.test(h))process.exit(1);const images=h.match(/<img\\b[^>]*>/g)||[];if(!images.length||images.some(tag=>!/\\balt=\"[^\"]+\"/.test(tag)))process.exit(1);const footer=h.match(/<footer class=\"site-footer\">([\\s\\S]*?)<\\/footer>/)?.[1]||'';if(!footer.includes('class=\"support glass-panel\"')||!footer.includes('class=\"footer\"'))process.exit(1)"
 grep -q "寻找本地合作伙伴：咖啡/酒店/摄影。" /tmp/sunset-v2-public-index.html
 grep -q "咖啡 · 住宿 · 器材租赁 · 摄影服务" /tmp/sunset-v2-public-index.html
@@ -282,6 +283,7 @@ grep -q "city-card__image" /tmp/sunset-v2-public-app.js
 grep -q "function renderWeatherBadge" /tmp/sunset-v2-public-app.js
 grep -q "function renderWeatherDetails" /tmp/sunset-v2-public-app.js
 grep -q "function renderBlueHour" /tmp/sunset-v2-public-app.js
+grep -q "light-timeline-connector" /tmp/sunset-v2-public-app.js
 grep -q "function submitObservationFeedback" /tmp/sunset-v2-public-app.js
 grep -q "const FEEDBACK_API_URL = '/api/feedback'" /tmp/sunset-v2-public-app.js
 curl -fsS https://sunsetpredict.cloud/wechat-pay.jpg -o /tmp/sunset-v2-public-qr-check.jpg

@@ -1316,11 +1316,70 @@ button,
   line-height: 1.35;
 }
 
-.detail-hero__meta {
+.light-timeline {
+  display: grid;
+  gap: 5px;
   margin-top: 9px;
+}
+
+.light-timeline__label {
   color: var(--faint);
-  font-size: 0.66rem;
-  line-height: 1.6;
+  font-size: 0.54rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.light-timeline__track {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+.light-timeline__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.detail-hero__advice .light-timeline__item strong {
+  color: rgba(255, 240, 218, 0.94);
+  font-family: "Manrope", sans-serif;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.light-timeline__item small,
+.light-timeline__arrival {
+  color: var(--faint);
+  font-size: 0.6rem;
+  line-height: 1.5;
+}
+
+.light-timeline__item--blue strong,
+.detail-hero__advice .light-timeline__item--blue strong {
+  color: #a9c8ff;
+}
+
+.light-timeline__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #f3a069;
+  box-shadow: 0 0 10px rgba(243, 160, 105, 0.7);
+}
+
+.light-timeline__dot--blue {
+  background: #78a9ff;
+  box-shadow: 0 0 10px rgba(120, 169, 255, 0.75);
+}
+
+.light-timeline__connector {
+  color: rgba(255, 255, 255, 0.28);
+  font-size: 0.7rem;
 }
 
 .camera-params {
@@ -1527,20 +1586,6 @@ button,
   align-items: flex-end;
   justify-content: space-between;
   gap: 18px;
-}
-
-.blue-hour__time {
-  color: #a9c8ff;
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-}
-
-.blue-hour__route {
-  margin-top: 12px;
-  color: var(--faint);
-  font-size: 0.62rem;
-  letter-spacing: 0.02em;
 }
 
 .blue-hour__card {

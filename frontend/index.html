@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@500;600&amp;display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/styles.css?v=20260718-blue-hour-v25">
+  <link rel="stylesheet" href="css/styles.css?v=20260718-light-timeline-v26">
 </head>
 
 <body>
@@ -193,7 +193,21 @@
               <div class="detail-hero__advice">
                 <span class="detail__label">建议机位</span>
                 <strong id="best-spot">--</strong>
-                <span class="detail-hero__meta"><span id="sunset-time">--</span> 日落 · <span id="arrival-meta">到达建议计算中</span></span>
+                <div class="light-timeline" aria-label="光影时间轴">
+                  <span class="light-timeline__label">光影时间轴</span>
+                  <div class="light-timeline__track">
+                    <span class="light-timeline__item">
+                      <i class="light-timeline__dot light-timeline__dot--sunset" aria-hidden="true"></i>
+                      <strong id="sunset-time">--:--</strong><small>日落</small>
+                    </span>
+                    <span class="light-timeline__connector" id="light-timeline-connector" aria-hidden="true" hidden>→</span>
+                    <span class="light-timeline__item light-timeline__item--blue" id="hero-blue-hour" hidden>
+                      <i class="light-timeline__dot light-timeline__dot--blue" aria-hidden="true"></i>
+                      <strong id="hero-blue-hour-time">--:--–--:--</strong><small>蓝调</small>
+                    </span>
+                  </div>
+                  <span class="light-timeline__arrival" id="arrival-meta">到达建议计算中</span>
+                </div>
               </div>
               <div class="camera-params" aria-label="建议相机参数">
                 <div><span>光圈</span><strong id="camera-aperture">f/8</strong></div>
@@ -226,12 +240,10 @@
             <section class="detail-section blue-hour" id="blue-hour-section" aria-labelledby="blue-hour-title" hidden>
               <div class="blue-hour__heading">
                 <div>
-                  <span class="detail__eyebrow">Blue hour</span>
-                  <h3 class="detail-section__title" id="blue-hour-title">蓝调时刻</h3>
+                  <span class="detail__eyebrow">Blue hour quality</span>
+                  <h3 class="detail-section__title" id="blue-hour-title">蓝调质量</h3>
                 </div>
-                <div class="blue-hour__time" id="blue-hour-time">--:--–--:--</div>
               </div>
-              <div class="blue-hour__route" id="blue-hour-route">日落 → 晚霞峰值 → 极致蓝调</div>
               <div class="blue-hour__card">
                 <div class="blue-hour__score">
                   <strong id="blue-hour-score">--</strong><span>/ 100</span>
@@ -440,6 +452,6 @@
   </div>
 
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-  <script src="js/app.js?v=20260718-blue-hour-v25"></script>
+  <script src="js/app.js?v=20260718-light-timeline-v26"></script>
 </body>
 </html>
