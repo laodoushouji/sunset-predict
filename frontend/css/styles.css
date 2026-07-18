@@ -1067,28 +1067,30 @@ button,
 
 .city-card__footer {
   display: flex;
-  align-items: flex-end;
+  min-height: 1.5em;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
 .city-card__spot {
-  display: -webkit-box;
+  display: flex;
+  min-width: 0;
   max-width: 75%;
+  align-items: center;
   overflow: hidden;
   color: rgba(255, 255, 255, 0.76);
   font-size: 0.68rem;
   font-weight: 700;
   line-height: 1.5;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  white-space: nowrap;
 }
 
 .city-card__spot svg {
+  flex: none;
   width: 13px;
   height: 13px;
   margin-right: 5px;
-  vertical-align: -2px;
 }
 
 .city-card__status {
@@ -1097,6 +1099,7 @@ button,
   font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.08em;
+  line-height: 1.5;
 }
 
 .city-card.is-live .city-card__status {

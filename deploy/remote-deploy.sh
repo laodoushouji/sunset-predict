@@ -169,6 +169,7 @@ grep -q "detail-overlay" /tmp/sunset-v2-public-index.html
 grep -q "物理层拆解" /tmp/sunset-v2-public-index.html
 grep -q "作者碎碎念" /tmp/sunset-v2-public-index.html
 grep -q "20260717-feedback-open-v23" /tmp/sunset-v2-public-index.html
+grep -q "20260718-city-caption-align-v24" /tmp/sunset-v2-public-index.html
 grep -q 'id="sunset-window-track"' /tmp/sunset-v2-public-index.html
 grep -q 'id="sunset-window-details"' /tmp/sunset-v2-public-index.html
 grep -q 'id="feedback-title"' /tmp/sunset-v2-public-index.html
