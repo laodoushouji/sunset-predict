@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@500;600&amp;display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/styles.css?v=20260719-share-poster-v29">
+  <link rel="stylesheet" href="css/styles.css?v=20260719-instant-weather-v30">
+  <script async src="https://unpkg.com/lucide@1.25.0/dist/umd/lucide.min.js"></script>
   <script
     defer
     src="/umami/script.js"
@@ -22,6 +22,7 @@
     data-exclude-hash="true"
     data-do-not-track="true"
   ></script>
+  <script id="forecast-bootstrap" type="application/json"></script>
 </head>
 
 <body>
@@ -34,7 +35,7 @@
       <div>
         <div class="brand-mark">
           <span class="brand-mark__icon" aria-hidden="true">
-            <i data-lucide="sunset" class="h-4 w-4" aria-hidden="true"></i>
+            <i data-lucide="sunset" aria-hidden="true"></i>
           </span>
           <span>Sunset Predict · Cloud</span>
         </div>
@@ -55,7 +56,7 @@
     </header>
 
     <!-- 双列流：西湖预测卡片 + 外滩数据接入卡片 -->
-    <section class="card-grid grid grid-cols-2 gap-4 sm:gap-6" aria-label="景区晚霞预测">
+    <section class="card-grid" aria-label="景区晚霞预测">
       <article
         class="card card--active"
         id="card-xihu"
@@ -110,7 +111,7 @@
               <span class="card__updated">更新于 <span id="update-time">--:--</span></span>
               <span class="card__expand-hint" id="expand-hint">
                 <span>摄影指南</span>
-                <i data-lucide="chevron-down" class="h-4 w-4" aria-hidden="true"></i>
+                <i data-lucide="chevron-down" aria-hidden="true"></i>
               </span>
             </div>
           </div>
@@ -419,7 +420,7 @@
         </div>
         <div class="support__actions">
           <button class="support__button support__button--wechat" id="wechat-support-open" type="button">
-            <i data-lucide="heart-handshake" class="h-4 w-4" aria-hidden="true"></i>
+            <i data-lucide="heart-handshake" aria-hidden="true"></i>
             微信赞赏
           </button>
         </div>
@@ -438,7 +439,7 @@
     <button class="support-modal__backdrop" type="button" data-support-close aria-label="关闭赞赏弹窗"></button>
     <div class="support-modal__card glass-panel">
       <button class="support-modal__close" type="button" data-support-close aria-label="关闭">
-        <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
+        <i data-lucide="x" aria-hidden="true"></i>
       </button>
       <span class="support__eyebrow">WeChat support</span>
       <h2 class="support-modal__title" id="wechat-support-title">为浪漫续航</h2>
@@ -452,7 +453,7 @@
     <button class="support-modal__backdrop" type="button" data-partner-close aria-label="关闭商业合作弹窗"></button>
     <div class="support-modal__card glass-panel">
       <button class="support-modal__close" type="button" data-partner-close aria-label="关闭商业合作弹窗">
-        <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
+        <i data-lucide="x" aria-hidden="true"></i>
       </button>
       <span class="support__eyebrow">Sunset Partner</span>
       <h2 class="support-modal__title" id="partner-modal-title">一起做点与晚霞有关的事</h2>
@@ -489,7 +490,6 @@
     </div>
   </div>
 
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-  <script src="js/app.js?v=20260719-share-poster-v29"></script>
+  <script src="js/app.js?v=20260719-instant-weather-v30"></script>
 </body>
 </html>

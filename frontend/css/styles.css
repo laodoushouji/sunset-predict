@@ -275,6 +275,14 @@ button,
   background: rgba(255, 255, 255, 0.05);
 }
 
+.brand-mark__icon svg,
+.card__expand-hint svg,
+.support__button svg,
+.support-modal__close svg {
+  width: 16px;
+  height: 16px;
+}
+
 .site-title {
   max-width: 690px;
   margin: 0;
@@ -330,6 +338,9 @@ button,
 }
 
 .card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
   align-items: stretch;
 }
 
@@ -2312,6 +2323,7 @@ body.detail-open {
 
   /* 手机端保持双列，同时让两张卡片等宽、等高、顶部对齐 */
   .card-grid {
+    gap: 14px;
     align-items: stretch;
   }
 

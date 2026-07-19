@@ -86,6 +86,7 @@ install -d -m 750 "$cache_root"
 "$node_bin" --check "$release_dir/worker/src/services/cities.js"
 "$node_bin" --check "$release_dir/worker/src/services/timeline.js"
 "$node_bin" --check "$release_dir/worker/src/services/feedback.js"
+"$node_bin" --check "$release_dir/worker/src/services/frontend-bootstrap.js"
 "$node_bin" --check "$release_dir/worker/src/services/memory-cache.js"
 "$node_bin" --check "$release_dir/worker/src/services/sunset-window.js"
 "$node_bin" --check "$release_dir/worker/src/services/qweather.js"
@@ -165,6 +166,10 @@ nginx -s reload
 test "$(curl -sS -o /dev/null -w '%{http_code}' http://sunsetpredict.cloud/)" = "301"
 test "$(curl -sS -o /dev/null -w '%{http_code}' https://sunsetpredict.cloud/)" = "200"
 curl -fsS https://sunsetpredict.cloud/ -o /tmp/sunset-v2-public-index.html
+curl -fsS --compressed -D /tmp/sunset-v2-public-index-gzip.txt -o /dev/null https://sunsetpredict.cloud/
+curl -fsS --compressed -D /tmp/sunset-v2-public-timeline-gzip.txt -o /dev/null https://sunsetpredict.cloud/api/timeline
+grep -Eiq '^content-encoding: gzip' /tmp/sunset-v2-public-index-gzip.txt
+grep -Eiq '^content-encoding: gzip' /tmp/sunset-v2-public-timeline-gzip.txt
 grep -Fq '<title>晚霞预测 - 今日火烧云概率与摄影指南 | Sunset Predict</title>' /tmp/sunset-v2-public-index.html
 grep -Fq '<meta name="description" content="专业提供杭州西湖、上海外滩等热门景区晚霞、火烧云精准预测。结合 250hPa 高空湿度与格点气象算法，为摄影师提供机位建议与参数指导。">' /tmp/sunset-v2-public-index.html
 grep -Fq '<meta name="keywords" content="晚霞预测, 火烧云预报, 西湖摄影, 外滩日落, 摄影机位, 杭州天气">' /tmp/sunset-v2-public-index.html
@@ -174,8 +179,14 @@ grep -q "全国摄影站" /tmp/sunset-v2-public-index.html
 grep -q "detail-overlay" /tmp/sunset-v2-public-index.html
 grep -q "物理层拆解" /tmp/sunset-v2-public-index.html
 grep -q "作者碎碎念" /tmp/sunset-v2-public-index.html
-grep -q "css/styles.css?v=20260719-share-poster-v29" /tmp/sunset-v2-public-index.html
-grep -q "js/app.js?v=20260719-share-poster-v29" /tmp/sunset-v2-public-index.html
+grep -q "css/styles.css?v=20260719-instant-weather-v30" /tmp/sunset-v2-public-index.html
+grep -q "js/app.js?v=20260719-instant-weather-v30" /tmp/sunset-v2-public-index.html
+grep -q '<script async src="https://unpkg.com/lucide@1.25.0/dist/umd/lucide.min.js"></script>' /tmp/sunset-v2-public-index.html
+grep -Eq 'id="forecast-bootstrap" type="application/json">\{"today":"[0-9]{4}-[0-9]{2}-[0-9]{2}"' /tmp/sunset-v2-public-index.html
+if grep -q 'cdn.tailwindcss.com' /tmp/sunset-v2-public-index.html; then
+  echo "Blocking Tailwind runtime still present" >&2
+  exit 1
+fi
 grep -q 'src="/umami/script.js"' /tmp/sunset-v2-public-index.html
 grep -q 'data-website-id="890d254b-a58a-44de-a333-421e0345058b"' /tmp/sunset-v2-public-index.html
 grep -q 'data-exclude-search="true"' /tmp/sunset-v2-public-index.html
@@ -303,6 +314,8 @@ grep -q "trackUmamiEvent('partner-open', activeDetailSpot)" /tmp/sunset-v2-publi
 grep -q "async function createSharePoster" /tmp/sunset-v2-public-app.js
 grep -q "async function openSharePoster" /tmp/sunset-v2-public-app.js
 grep -q "async function sharePreparedPoster" /tmp/sunset-v2-public-app.js
+grep -q "function readForecastBootstrap" /tmp/sunset-v2-public-app.js
+grep -q "function applyTimelinePayload" /tmp/sunset-v2-public-app.js
 grep -q "function submitObservationFeedback" /tmp/sunset-v2-public-app.js
 grep -q "const FEEDBACK_API_URL = '/api/feedback'" /tmp/sunset-v2-public-app.js
 curl -fsS https://sunsetpredict.cloud/wechat-pay.jpg -o /tmp/sunset-v2-public-qr-check.jpg

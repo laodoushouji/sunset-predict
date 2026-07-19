@@ -67,6 +67,12 @@ async function fetchApi(url, timeoutMs) {
   throw lastError;
 }
 
+function refreshIcons() {
+  window.lucide?.createIcons?.();
+}
+
+window.addEventListener('load', refreshIcons, { once: true });
+
 const REGIONAL_SPOTS = [
   { slug: 'beijing', city: '北京 · Beijing', name: '景山 / 故宫', hook: '故宫全景烧霞预警' },
   { slug: 'erhai', city: '大理 · Dali', name: '洱海', hook: '龙龛码头机位建议' },
@@ -303,8 +309,13 @@ const CONF_MAP = {
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
   renderRegionalCards();
-  lucide.createIcons();
+  refreshIcons();
   bindEvents();
+  const bootstrap = readForecastBootstrap();
+  if (bootstrap) {
+    applyTimelinePayload(bootstrap);
+    requestAnimationFrame(openDetailFromHash);
+  }
   fetchTimeline().finally(() => requestAnimationFrame(openDetailFromHash));
 });
 
@@ -526,6 +537,25 @@ function changeDay(direction) {
   trackUmamiEvent('date-change');
 }
 
+function readForecastBootstrap() {
+  const element = document.getElementById('forecast-bootstrap');
+  if (!element?.textContent.trim()) return null;
+  try {
+    const timeline = JSON.parse(element.textContent);
+    return timeline?.days?.some(day => day.offset === 0 && day.xihu && day.waitan) ? timeline : null;
+  } catch {
+    return null;
+  }
+}
+
+function applyTimelinePayload(timeline) {
+  timelineDays = timeline.days || [];
+  timelineToday = timeline.today;
+  selectedDayIndex = Math.max(0, timelineDays.findIndex(day => day.offset === 0));
+  if (!timelineDays.length) throw new Error('时间线为空');
+  renderTimelineDay(timelineDays[selectedDayIndex]);
+}
+
 async function fetchTimeline() {
   if (window.location.protocol === 'file:') {
     renderDemo();
@@ -536,11 +566,7 @@ async function fetchTimeline() {
     const response = await fetchApi(TIMELINE_API_URL, 30000);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const timeline = await response.json();
-    timelineDays = timeline.days || [];
-    timelineToday = timeline.today;
-    selectedDayIndex = Math.max(0, timelineDays.findIndex(day => day.offset === 0));
-    if (!timelineDays.length) throw new Error('时间线为空');
-    renderTimelineDay(timelineDays[selectedDayIndex]);
+    applyTimelinePayload(timeline);
   } catch (error) {
     console.info('[Sunset Predict] Timeline unavailable:', error.message);
     await Promise.all([fetchData(), fetchWaitanData(), fetchRegionalSpots()]);
@@ -1105,7 +1131,7 @@ async function openSharePoster() {
     document.getElementById('share-poster-modal').hidden = false;
     document.body.classList.add('modal-open');
     systemButton.focus();
-    setTimeout(() => lucide.createIcons(), 30);
+    setTimeout(refreshIcons, 30);
   } catch (error) {
     showToast(error.message || '长图生成失败，请稍后重试');
   } finally {
@@ -1476,7 +1502,7 @@ function renderDetailContent(data, spotId) {
     ? `<span class="alpenglow-badge"><i data-lucide="sparkles" style="width:12px;height:12px"></i> ${data.alpenglow.desc}</span>`
     : '';
   prepareSharePoster(data, spotId).catch(() => {});
-  setTimeout(() => lucide.createIcons(), 60);
+  setTimeout(refreshIcons, 60);
 }
 
 function renderToday(data) {
@@ -1600,7 +1626,7 @@ function openDetail(spotId = 'xihu', { updateUrl = true, focus = true } = {}) {
   document.body.classList.add('detail-open');
   if (updateUrl) updateDetailUrl(true, spotId);
   if (focus) panel.focus({ preventScroll: true });
-  setTimeout(() => lucide.createIcons(), 80);
+  setTimeout(refreshIcons, 80);
 }
 
 function closeDetail({ updateUrl = true, focus = true } = {}) {

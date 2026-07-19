@@ -8,8 +8,9 @@ const require = createRequire(import.meta.url);
 const { getXihuPrediction } = require('./services/xihu');
 const { getShanghaiPrediction } = require('./services/shanghai');
 const { CITY_ALIASES, CITY_SPOTS, getAllCityPredictions } = require('./services/cities');
+const { buildForecastBootstrap, injectForecastBootstrap, shanghaiDate } = require('./services/frontend-bootstrap');
 const { createMemoryCache } = require('./services/memory-cache');
-const { buildTimeline } = require('./services/timeline');
+const { buildTimeline, loadHistoryDay } = require('./services/timeline');
 const {
   FeedbackError,
   feedbackAvailability,
@@ -108,7 +109,12 @@ async function serveStatic(requestPath, response) {
   const entry = STATIC_FILES.get(requestPath);
   if (!entry) return false;
   const [relativePath, contentType] = entry;
-  const body = await fs.readFile(path.join(FRONTEND_ROOT, relativePath));
+  let body = await fs.readFile(path.join(FRONTEND_ROOT, relativePath));
+  if (requestPath === '/') {
+    const today = shanghaiDate();
+    const day = await loadHistoryDay(HISTORY_ROOT, today);
+    body = injectForecastBootstrap(body.toString('utf8'), buildForecastBootstrap(day, today));
+  }
   send(response, 200, body, {
     'content-type': contentType,
     'cache-control': requestPath === '/' ? 'no-cache' : 'public, max-age=86400',
@@ -167,7 +173,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (url.pathname === '/health') {
-      sendJson(response, 200, { ok: true, services: ['xihu-v3', 'waitan-v4', 'regional-v3', 'qweather-weather-v1', 'blue-hour-v1', 'timeline-v2', 'feedback-v1'] });
+      sendJson(response, 200, { ok: true, services: ['xihu-v3', 'waitan-v4', 'regional-v3', 'qweather-weather-v1', 'blue-hour-v1', 'timeline-v2', 'feedback-v1', 'frontend-bootstrap-v1'] });
       return;
     }
 
