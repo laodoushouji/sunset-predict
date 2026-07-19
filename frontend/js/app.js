@@ -84,6 +84,20 @@ const DETAIL_SPOTS = {
   }])),
 };
 
+const UMAMI_EVENTS = new Set([
+  'detail-open',
+  'date-change',
+  'feedback-submit',
+  'support-open',
+  'partner-open',
+]);
+
+function trackUmamiEvent(eventName, spot = 'all') {
+  if (!UMAMI_EVENTS.has(eventName) || typeof window.umami?.track !== 'function') return;
+  const safeSpot = spot === 'all' || Object.prototype.hasOwnProperty.call(DETAIL_SPOTS, spot) ? spot : 'all';
+  window.umami.track(eventName, { spot: safeSpot });
+}
+
 const SCENIC_CAPTIONS = {
   xihu: {
     high: '湖面铺霞 · 浮光映红 · 西山染金',
@@ -345,6 +359,7 @@ function bindEvents() {
   };
 
   supportOpen.addEventListener('click', () => {
+    trackUmamiEvent('support-open');
     supportTrigger = document.activeElement;
     supportModal.hidden = false;
     document.body.classList.add('modal-open');
@@ -359,6 +374,7 @@ function bindEvents() {
   };
 
   partnerOpen.addEventListener('click', () => {
+    trackUmamiEvent('partner-open', activeDetailSpot);
     partnerTrigger = document.activeElement;
     partnerModal.hidden = false;
     document.body.classList.add('modal-open');
@@ -490,6 +506,7 @@ function changeDay(direction) {
   }
   selectedDayIndex = nextIndex;
   renderTimelineDay(timelineDays[selectedDayIndex], direction);
+  trackUmamiEvent('date-change');
 }
 
 async function fetchTimeline() {
@@ -1036,6 +1053,7 @@ async function submitObservationFeedback() {
       localStorage.setItem(feedbackStorageKey(feedbackDraft.spot, feedbackDraft.date), JSON.stringify(stored));
     } catch {}
     feedbackDraft.submitted = true;
+    trackUmamiEvent('feedback-submit', feedbackDraft.spot);
     showToast(result.message || '实况已记录');
   } catch (error) {
     feedbackDraft.error = error.message;
@@ -1196,6 +1214,7 @@ function openDetail(spotId = 'xihu', { updateUrl = true, focus = true } = {}) {
   }
   activeDetailSpot = spotId;
   detailOpen = true;
+  trackUmamiEvent('detail-open', spotId);
   resetDetailDragStyles();
   renderDetailContent(data, spotId);
 

@@ -174,7 +174,12 @@ grep -q "全国摄影站" /tmp/sunset-v2-public-index.html
 grep -q "detail-overlay" /tmp/sunset-v2-public-index.html
 grep -q "物理层拆解" /tmp/sunset-v2-public-index.html
 grep -q "作者碎碎念" /tmp/sunset-v2-public-index.html
-grep -q "20260718-regional-align-v27" /tmp/sunset-v2-public-index.html
+grep -q "js/app.js?v=20260719-umami-v28" /tmp/sunset-v2-public-index.html
+grep -q 'src="/umami/script.js"' /tmp/sunset-v2-public-index.html
+grep -q 'data-website-id="890d254b-a58a-44de-a333-421e0345058b"' /tmp/sunset-v2-public-index.html
+grep -q 'data-exclude-search="true"' /tmp/sunset-v2-public-index.html
+grep -q 'data-exclude-hash="true"' /tmp/sunset-v2-public-index.html
+grep -q 'data-do-not-track="true"' /tmp/sunset-v2-public-index.html
 grep -q 'id="sunset-window-track"' /tmp/sunset-v2-public-index.html
 grep -q 'id="sunset-window-details"' /tmp/sunset-v2-public-index.html
 grep -q 'id="feedback-title"' /tmp/sunset-v2-public-index.html
@@ -284,6 +289,12 @@ grep -q "function renderWeatherBadge" /tmp/sunset-v2-public-app.js
 grep -q "function renderWeatherDetails" /tmp/sunset-v2-public-app.js
 grep -q "function renderBlueHour" /tmp/sunset-v2-public-app.js
 grep -q "light-timeline-connector" /tmp/sunset-v2-public-app.js
+grep -q "function trackUmamiEvent" /tmp/sunset-v2-public-app.js
+grep -q "trackUmamiEvent('detail-open', spotId)" /tmp/sunset-v2-public-app.js
+grep -q "trackUmamiEvent('date-change')" /tmp/sunset-v2-public-app.js
+grep -q "trackUmamiEvent('feedback-submit', feedbackDraft.spot)" /tmp/sunset-v2-public-app.js
+grep -q "trackUmamiEvent('support-open')" /tmp/sunset-v2-public-app.js
+grep -q "trackUmamiEvent('partner-open', activeDetailSpot)" /tmp/sunset-v2-public-app.js
 grep -q "function submitObservationFeedback" /tmp/sunset-v2-public-app.js
 grep -q "const FEEDBACK_API_URL = '/api/feedback'" /tmp/sunset-v2-public-app.js
 curl -fsS https://sunsetpredict.cloud/wechat-pay.jpg -o /tmp/sunset-v2-public-qr-check.jpg
