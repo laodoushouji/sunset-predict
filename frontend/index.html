@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@500;600&amp;display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/styles.css?v=20260718-regional-align-v27">
+  <link rel="stylesheet" href="css/styles.css?v=20260719-share-poster-v29">
   <script
     defer
     src="/umami/script.js"
@@ -186,9 +186,15 @@
                 <span class="detail__eyebrow" id="guide-eyebrow">Photography guide</span>
                 <h2 class="detail__title" id="guide-title">今天的摄影指南</h2>
               </div>
-              <button class="detail__close" id="detail-close" type="button" aria-label="关闭摄影指南">
-                <i data-lucide="x" aria-hidden="true"></i>
-              </button>
+              <div class="detail__actions">
+                <button class="detail__share" id="detail-share" type="button" aria-label="生成并分享摄影指南长图">
+                  <i data-lucide="share-2" aria-hidden="true"></i>
+                  <span>分享长图</span>
+                </button>
+                <button class="detail__close" id="detail-close" type="button" aria-label="关闭摄影指南">
+                  <i data-lucide="x" aria-hidden="true"></i>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -460,7 +466,30 @@
     </div>
   </div>
 
+  <div class="support-modal share-poster-modal" id="share-poster-modal" role="dialog" aria-modal="true" aria-labelledby="share-poster-title" hidden>
+    <button class="support-modal__backdrop" type="button" data-share-close aria-label="关闭分享长图预览"></button>
+    <div class="support-modal__card share-poster-modal__card glass-panel">
+      <button class="support-modal__close" type="button" data-share-close aria-label="关闭分享长图预览">
+        <i data-lucide="x" aria-hidden="true"></i>
+      </button>
+      <span class="support-modal__eyebrow">Share the sunset</span>
+      <h2 class="support-modal__title" id="share-poster-title">分享摄影指南长图</h2>
+      <img class="share-poster-modal__preview" id="share-poster-preview" alt="晚霞摄影指南分享长图预览">
+      <div class="share-poster-modal__actions">
+        <button class="support__button support__button--wechat" id="share-system-button" type="button">
+          <i data-lucide="share-2" aria-hidden="true"></i>
+          <span>分享到应用</span>
+        </button>
+        <a class="share-poster-modal__download" id="share-poster-download" href="#" download>
+          <i data-lucide="download" aria-hidden="true"></i>
+          <span>保存长图</span>
+        </a>
+      </div>
+      <p class="support-modal__hint">微信内可长按图片保存，再发送到朋友圈或小红书。</p>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-  <script src="js/app.js?v=20260719-umami-v28"></script>
+  <script src="js/app.js?v=20260719-share-poster-v29"></script>
 </body>
 </html>

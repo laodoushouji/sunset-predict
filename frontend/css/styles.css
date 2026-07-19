@@ -1216,9 +1216,16 @@ button,
   gap: 24px;
 }
 
+.detail__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail__share,
 .detail__close {
   display: grid;
-  width: 38px;
   height: 38px;
   flex: none;
   padding: 0;
@@ -1230,6 +1237,27 @@ button,
   cursor: pointer;
 }
 
+.detail__share {
+  display: inline-flex;
+  width: auto;
+  padding: 0 13px;
+  gap: 7px;
+  color: rgba(255, 240, 224, 0.88);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.detail__share:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.detail__close {
+  width: 38px;
+}
+
+.detail__share svg,
 .detail__close svg {
   width: 17px;
   height: 17px;
@@ -2050,6 +2078,10 @@ button,
   z-index: 60;
 }
 
+.share-poster-modal {
+  z-index: 62;
+}
+
 .support-modal__backdrop {
   position: absolute;
   inset: 0;
@@ -2134,6 +2166,52 @@ button,
 .partner-modal__note strong {
   color: rgba(255, 255, 255, 0.76);
   font-weight: 700;
+}
+
+.share-poster-modal__card {
+  width: min(100%, 560px);
+  padding: 24px;
+}
+
+.share-poster-modal__preview {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: min(58dvh, 620px);
+  margin: 18px auto 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: #0a0d16;
+  object-fit: contain;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.34);
+}
+
+.share-poster-modal__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.share-poster-modal__download {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.share-poster-modal__actions svg {
+  width: 16px;
+  height: 16px;
 }
 
 body.modal-open,
@@ -2516,6 +2594,15 @@ body.detail-open {
   }
 
   .score__unit {
+    display: none;
+  }
+
+  .detail__share {
+    width: 38px;
+    padding: 0;
+  }
+
+  .detail__share span {
     display: none;
   }
 

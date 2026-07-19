@@ -174,7 +174,8 @@ grep -q "全国摄影站" /tmp/sunset-v2-public-index.html
 grep -q "detail-overlay" /tmp/sunset-v2-public-index.html
 grep -q "物理层拆解" /tmp/sunset-v2-public-index.html
 grep -q "作者碎碎念" /tmp/sunset-v2-public-index.html
-grep -q "js/app.js?v=20260719-umami-v28" /tmp/sunset-v2-public-index.html
+grep -q "css/styles.css?v=20260719-share-poster-v29" /tmp/sunset-v2-public-index.html
+grep -q "js/app.js?v=20260719-share-poster-v29" /tmp/sunset-v2-public-index.html
 grep -q 'src="/umami/script.js"' /tmp/sunset-v2-public-index.html
 grep -q 'data-website-id="890d254b-a58a-44de-a333-421e0345058b"' /tmp/sunset-v2-public-index.html
 grep -q 'data-exclude-search="true"' /tmp/sunset-v2-public-index.html
@@ -184,6 +185,10 @@ grep -q 'id="sunset-window-track"' /tmp/sunset-v2-public-index.html
 grep -q 'id="sunset-window-details"' /tmp/sunset-v2-public-index.html
 grep -q 'id="feedback-title"' /tmp/sunset-v2-public-index.html
 grep -q 'id="feedback-submit"' /tmp/sunset-v2-public-index.html
+grep -q 'id="detail-share"' /tmp/sunset-v2-public-index.html
+grep -q 'id="share-poster-modal"' /tmp/sunset-v2-public-index.html
+grep -q 'id="share-system-button"' /tmp/sunset-v2-public-index.html
+grep -q 'id="share-poster-download"' /tmp/sunset-v2-public-index.html
 grep -q 'data-feedback-quality="95"' /tmp/sunset-v2-public-index.html
 grep -q 'id="xihu-day-status"' /tmp/sunset-v2-public-index.html
 grep -q 'id="waitan-weather"' /tmp/sunset-v2-public-index.html
@@ -295,6 +300,9 @@ grep -q "trackUmamiEvent('date-change')" /tmp/sunset-v2-public-app.js
 grep -q "trackUmamiEvent('feedback-submit', feedbackDraft.spot)" /tmp/sunset-v2-public-app.js
 grep -q "trackUmamiEvent('support-open')" /tmp/sunset-v2-public-app.js
 grep -q "trackUmamiEvent('partner-open', activeDetailSpot)" /tmp/sunset-v2-public-app.js
+grep -q "async function createSharePoster" /tmp/sunset-v2-public-app.js
+grep -q "async function openSharePoster" /tmp/sunset-v2-public-app.js
+grep -q "async function sharePreparedPoster" /tmp/sunset-v2-public-app.js
 grep -q "function submitObservationFeedback" /tmp/sunset-v2-public-app.js
 grep -q "const FEEDBACK_API_URL = '/api/feedback'" /tmp/sunset-v2-public-app.js
 curl -fsS https://sunsetpredict.cloud/wechat-pay.jpg -o /tmp/sunset-v2-public-qr-check.jpg

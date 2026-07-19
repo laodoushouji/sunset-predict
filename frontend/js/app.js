@@ -22,6 +22,10 @@ let advertiserData = window.advertiserData || null;
 let ephemeralFeedbackClientId = null;
 let blueHourTimer = null;
 let blueHourThemeTimer = null;
+let sharePosterPromise = null;
+let sharePosterKey = '';
+let sharePosterFile = null;
+let sharePosterUrl = '';
 const feedbackDraft = {
   spot: null,
   date: null,
@@ -319,6 +323,7 @@ function bindEvents() {
 
   document.getElementById('detail-overlay').addEventListener('click', () => closeDetail());
   document.getElementById('detail-close').addEventListener('click', () => closeDetail());
+  document.getElementById('detail-share').addEventListener('click', openSharePoster);
   bindDetailDrag();
   window.addEventListener('hashchange', () => {
     const spotId = detailSpotFromHash();
@@ -349,6 +354,8 @@ function bindEvents() {
   const partnerOpen = document.getElementById('partner-card-open');
   const partnerModal = document.getElementById('partner-modal');
   const partnerCloseButtons = partnerModal.querySelectorAll('[data-partner-close]');
+  const shareModal = document.getElementById('share-poster-modal');
+  const shareCloseButtons = shareModal.querySelectorAll('[data-share-close]');
   let supportTrigger = null;
   let partnerTrigger = null;
 
@@ -381,8 +388,18 @@ function bindEvents() {
     partnerModal.querySelector('.support-modal__close').focus();
   });
   partnerCloseButtons.forEach(button => button.addEventListener('click', closePartnerModal));
+
+  const closeShareModal = () => {
+    shareModal.hidden = true;
+    document.body.classList.remove('modal-open');
+    document.getElementById('detail-share').focus();
+  };
+
+  shareCloseButtons.forEach(button => button.addEventListener('click', closeShareModal));
+  document.getElementById('share-system-button').addEventListener('click', sharePreparedPoster);
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !partnerModal.hidden) closePartnerModal();
+    if (event.key === 'Escape' && !shareModal.hidden) closeShareModal();
+    else if (event.key === 'Escape' && !partnerModal.hidden) closePartnerModal();
     else if (event.key === 'Escape' && !supportModal.hidden) closeSupportModal();
     else if (event.key === 'Escape' && detailOpen) closeDetail();
   });
@@ -762,6 +779,360 @@ function partnerImageForSpot(spotId) {
   return `assets/city-${spotId}.webp?v=20260718-city-images-v3`;
 }
 
+function sharePosterCacheKey(data, spotId) {
+  return [spotId, data.date, data.quality ?? data.score, data.probability, data.capturedAt].join(':');
+}
+
+function posterRoundRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawPosterPanel(ctx, x, y, width, height, radius = 32) {
+  posterRoundRect(ctx, x, y, width, height, radius);
+  ctx.fillStyle = 'rgba(18, 23, 36, 0.88)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function posterTextLines(ctx, value, maxWidth, maxLines = 3) {
+  const characters = [...String(value || '')];
+  const lines = [];
+  let line = '';
+  let overflow = false;
+  for (const character of characters) {
+    const next = line + character;
+    if (line && ctx.measureText(next).width > maxWidth) {
+      lines.push(line);
+      line = character;
+      if (lines.length === maxLines) {
+        overflow = true;
+        break;
+      }
+    } else {
+      line = next;
+    }
+  }
+  if (!overflow && line && lines.length < maxLines) lines.push(line);
+  if (overflow && lines.length) {
+    let last = lines[lines.length - 1];
+    while (last && ctx.measureText(`${last}…`).width > maxWidth) last = last.slice(0, -1);
+    lines[lines.length - 1] = `${last}…`;
+  }
+  return lines;
+}
+
+function drawPosterText(ctx, value, x, y, maxWidth, lineHeight, maxLines = 3) {
+  const lines = posterTextLines(ctx, value, maxWidth, maxLines);
+  lines.forEach((line, index) => ctx.fillText(line, x, y + index * lineHeight));
+  return y + lines.length * lineHeight;
+}
+
+function loadPosterImage(source) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.decoding = 'async';
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('景区图片加载失败'));
+    image.src = source;
+  });
+}
+
+function drawPosterCover(ctx, image, x, y, width, height) {
+  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+  const sourceWidth = width / scale;
+  const sourceHeight = height / scale;
+  const sourceX = (image.naturalWidth - sourceWidth) / 2;
+  const sourceY = (image.naturalHeight - sourceHeight) / 2;
+  ctx.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+}
+
+function drawPosterMetric(ctx, { label, value, ratio, color, x, y, width }) {
+  ctx.fillStyle = 'rgba(255,255,255,0.58)';
+  ctx.font = '500 26px "Noto Sans SC", sans-serif';
+  ctx.fillText(label, x, y);
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.font = '700 30px Manrope, "Noto Sans SC", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(value, x + width, y - 2);
+  ctx.textAlign = 'left';
+  posterRoundRect(ctx, x, y + 48, width, 12, 6);
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fill();
+  const fillWidth = width * Math.max(0, Math.min(1, ratio));
+  if (fillWidth > 0) {
+    posterRoundRect(ctx, x, y + 48, Math.max(12, fillWidth), 12, 6);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+}
+
+function posterBestSpot(data, spotId) {
+  const dynamicSpot = spotId === 'xihu' ? getDynamicBestSpot(data.date) : null;
+  if (dynamicSpot?.label) return dynamicSpot.label;
+  if (data.bestSpot?.name) return `${data.bestSpot.name}${data.bestSpot.desc ? ` · ${data.bestSpot.desc}` : ''}`;
+  return data.photographyAdvice || '机位建议整理中';
+}
+
+function posterWeather(data) {
+  const weather = data.weather || {};
+  const parts = [weather.label || '天气待更新'];
+  const rate = Number(weather.precipitationRateMmH);
+  const probability = Number(weather.precipitationProbability);
+  if (Number.isFinite(rate)) parts.push(`${rate.toFixed(1)} mm/h`);
+  if (Number.isFinite(probability)) parts.push(`降水 ${Math.round(probability)}%`);
+  return parts.join(' · ');
+}
+
+function posterVerdict(data, spotId) {
+  if (typeof data.verdict === 'string' && data.verdict.trim()) return data.verdict.trim();
+  const quality = Number(data.quality ?? data.score ?? 0);
+  const probability = Number(data.probability ?? 0);
+  if (quality >= 60 && probability >= 60) return '今晚值得奔赴，画布与光路都已就位。';
+  if (quality >= 60) return '好景藏在云后，画布优秀，但光线存在阻断。';
+  if (probability >= 60) return '适合看一场清透落日，霞色不会太浓。';
+  return `${getScenicCaption(spotId, quality, probability)}，今晚不建议专程前往。`;
+}
+
+async function createSharePoster(data, spotId) {
+  await document.fonts?.ready;
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080;
+  canvas.height = 1920;
+  const ctx = canvas.getContext('2d');
+  const quality = Math.round(Number(data.quality ?? data.score ?? 0));
+  const rawProbability = Number(data.probability);
+  const probability = Number.isFinite(rawProbability) ? Math.round(rawProbability) : null;
+  const grade = getGrade(quality);
+  const tier = probabilityTier(probability ?? 0);
+  const meta = DETAIL_SPOTS[spotId];
+  const params = cameraParametersForScore(quality);
+  const metrics = data.metrics || {};
+  const canvasCoverage = Number(data.components?.canvasCoverage ?? data.components?.canvas ?? metrics.cloudHigh);
+  const visibilityKm = Number(metrics.visibilityKm ?? data.components?.visibilityKm);
+  const westernWindow = Number(data.components?.westernWindow ?? data.components?.windowLight ?? metrics.windowTransparency);
+  const scoreColor = { fire: '#ff7b55', orange: '#ffc06a', purple: '#d2a9ff', blue: '#9bc9ef' }[grade.key];
+  const probabilityColor = probability >= 60 ? '#6edca0' : probability >= 30 ? '#efc36e' : '#9aa5b8';
+
+  ctx.fillStyle = '#080b12';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  try {
+    const image = await loadPosterImage(partnerImageForSpot(spotId));
+    drawPosterCover(ctx, image, 0, 0, canvas.width, 720);
+  } catch {}
+  const photoShade = ctx.createLinearGradient(0, 0, 0, 760);
+  photoShade.addColorStop(0, 'rgba(5, 8, 15, 0.08)');
+  photoShade.addColorStop(0.46, 'rgba(7, 10, 18, 0.42)');
+  photoShade.addColorStop(1, '#080b12');
+  ctx.fillStyle = photoShade;
+  ctx.fillRect(0, 0, canvas.width, 780);
+  const sideShade = ctx.createLinearGradient(0, 0, canvas.width, 0);
+  sideShade.addColorStop(0, 'rgba(5,8,14,0.5)');
+  sideShade.addColorStop(0.7, 'rgba(5,8,14,0.04)');
+  ctx.fillStyle = sideShade;
+  ctx.fillRect(0, 0, canvas.width, 720);
+
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(255,255,255,0.72)';
+  ctx.font = '700 25px Manrope, sans-serif';
+  ctx.fillText('SUNSET PREDICT · CLOUD', 72, 56);
+  ctx.fillStyle = 'rgba(255,255,255,0.62)';
+  ctx.font = '500 28px "Noto Sans SC", sans-serif';
+  const posterDate = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai', month: 'long', day: 'numeric', weekday: 'short',
+  }).format(new Date(`${data.date}T12:00:00+08:00`));
+  ctx.fillText(`${posterDate} · 晚霞摄影指南`, 72, 118);
+  ctx.fillStyle = '#fff';
+  ctx.font = '600 70px "Noto Serif SC", serif';
+  ctx.fillText(meta.name, 72, 170);
+
+  ctx.font = '600 24px "Noto Sans SC", sans-serif';
+  const weatherText = posterWeather(data);
+  const weatherWidth = Math.min(600, ctx.measureText(weatherText).width + 44);
+  posterRoundRect(ctx, 72, 270, weatherWidth, 52, 26);
+  ctx.fillStyle = 'rgba(13,18,29,0.66)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.82)';
+  ctx.fillText(weatherText, 94, 282);
+
+  ctx.fillStyle = scoreColor;
+  ctx.font = '500 190px Manrope, sans-serif';
+  ctx.fillText(String(quality), 66, 340);
+  ctx.fillStyle = 'rgba(255,255,255,0.44)';
+  ctx.font = '600 27px Manrope, sans-serif';
+  ctx.fillText('/ 100 · QUALITY', 330, 494);
+
+  drawPosterPanel(ctx, 620, 354, 388, 178, 28);
+  ctx.fillStyle = probabilityColor;
+  ctx.font = '600 78px Manrope, sans-serif';
+  ctx.fillText(probability === null ? '--' : `${probability}%`, 654, 384);
+  ctx.fillStyle = 'rgba(255,255,255,0.62)';
+  ctx.font = '600 24px "Noto Sans SC", sans-serif';
+  ctx.fillText(`观测成功率 · ${data.probabilityLabel || tier.label}`, 654, 478);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.font = '600 36px "Noto Serif SC", serif';
+  drawPosterText(ctx, getScenicCaption(spotId, quality, probability), 72, 585, 936, 48, 2);
+
+  drawPosterPanel(ctx, 48, 748, 984, 376);
+  ctx.fillStyle = '#d5a98f';
+  ctx.font = '700 22px Manrope, sans-serif';
+  ctx.fillText('TONIGHT\'S PHOTO PLAN', 82, 782);
+  ctx.fillStyle = 'rgba(255,255,255,0.48)';
+  ctx.font = '600 23px "Noto Sans SC", sans-serif';
+  ctx.fillText('建议机位', 82, 828);
+  ctx.fillStyle = '#fff';
+  ctx.font = '600 38px "Noto Serif SC", serif';
+  drawPosterText(ctx, posterBestSpot(data, spotId), 82, 866, 916, 50, 2);
+  const sunset = data.sunTimes?.sunset || '--:--';
+  const blueHour = data.blueHour?.available ? ` · 蓝调 ${data.blueHour.start}–${data.blueHour.end}` : '';
+  ctx.fillStyle = 'rgba(255,255,255,0.66)';
+  ctx.font = '500 26px "Noto Sans SC", sans-serif';
+  ctx.fillText(`日落 ${sunset}${blueHour}`, 82, 974);
+  const arrival = data.sunsetWindow?.recommendedArrival
+    ? `${data.sunsetWindow.recommendedArrival} 前到达 · 守候至 ${data.sunsetWindow.recommendedLeave || '--:--'}`
+    : '不建议专程前往 · 可顺路守候';
+  ctx.fillText(arrival, 82, 1016);
+  ctx.fillStyle = 'rgba(255,255,255,0.88)';
+  ctx.font = '600 25px Manrope, "Noto Sans SC", sans-serif';
+  ctx.fillText(`${params.aperture}   ${params.shutter}   ISO ${params.iso}   WB ${params.wb}`, 82, 1062);
+
+  drawPosterPanel(ctx, 48, 1154, 984, 326);
+  ctx.fillStyle = '#d5a98f';
+  ctx.font = '700 22px Manrope, sans-serif';
+  ctx.fillText('PHYSICAL LAYERS · 物理层拆解', 82, 1188);
+  drawPosterMetric(ctx, {
+    label: '画布 Canvas', value: Number.isFinite(canvasCoverage) ? `${Math.round(canvasCoverage)}%` : '--',
+    ratio: Number.isFinite(canvasCoverage) ? canvasCoverage / 100 : 0, color: scoreColor, x: 82, y: 1242, width: 916,
+  });
+  drawPosterMetric(ctx, {
+    label: '滤镜 Filter', value: Number.isFinite(visibilityKm) ? `${visibilityKm.toFixed(1)} km` : '--',
+    ratio: Number.isFinite(visibilityKm) ? visibilityKm / 24 : 0, color: '#8fc3f4', x: 82, y: 1320, width: 916,
+  });
+  drawPosterMetric(ctx, {
+    label: '光源 Light Path', value: Number.isFinite(westernWindow) ? `${Math.round(westernWindow)}%` : '--',
+    ratio: Number.isFinite(westernWindow) ? westernWindow / 100 : 0, color: probabilityColor, x: 82, y: 1398, width: 916,
+  });
+
+  drawPosterPanel(ctx, 48, 1510, 984, 280);
+  ctx.fillStyle = '#d5a98f';
+  ctx.font = '700 22px Manrope, sans-serif';
+  ctx.fillText('THE VERDICT · 今晚怎么判断', 82, 1544);
+  ctx.fillStyle = 'rgba(255,255,255,0.94)';
+  ctx.font = '600 36px "Noto Serif SC", serif';
+  drawPosterText(ctx, posterVerdict(data, spotId), 82, 1590, 916, 50, 3);
+  ctx.fillStyle = 'rgba(255,255,255,0.46)';
+  ctx.font = '500 22px "Noto Sans SC", sans-serif';
+  drawPosterText(ctx, '观测成功率基于西方云路与本地遮挡估算，后续将结合历史实拍持续校准。', 82, 1732, 916, 34, 2);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.82)';
+  ctx.font = '700 28px Manrope, sans-serif';
+  ctx.fillText('sunsetpredict.cloud', 72, 1840);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(255,255,255,0.38)';
+  ctx.font = '500 22px "Noto Sans SC", sans-serif';
+  ctx.fillText('长按保存 · 分享给一起等晚霞的人', 1008, 1844);
+  ctx.textAlign = 'left';
+
+  const blob = await new Promise((resolve, reject) => canvas.toBlob(
+    value => value ? resolve(value) : reject(new Error('长图生成失败')),
+    'image/jpeg',
+    0.92,
+  ));
+  return {
+    blob,
+    fileName: `sunset-predict-${spotId}-${data.date}.jpg`,
+    title: `${meta.name}${relativeDayLabel(timelineOffsetForDate(data.date) ?? 0)}晚霞摄影指南`,
+  };
+}
+
+function prepareSharePoster(data, spotId) {
+  const key = sharePosterCacheKey(data, spotId);
+  if (sharePosterPromise && sharePosterKey === key) return sharePosterPromise;
+  sharePosterKey = key;
+  sharePosterPromise = createSharePoster(data, spotId).catch(error => {
+    if (sharePosterKey === key) sharePosterPromise = null;
+    throw error;
+  });
+  return sharePosterPromise;
+}
+
+function canSharePosterFile(file) {
+  if (!file || typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return false;
+  try {
+    return navigator.canShare({ files: [file] });
+  } catch {
+    return false;
+  }
+}
+
+async function openSharePoster() {
+  const data = detailDataForSpot(activeDetailSpot);
+  const button = document.getElementById('detail-share');
+  const label = button.querySelector('span');
+  if (!data || !activeDetailSpot || button.disabled) return;
+  button.disabled = true;
+  label.textContent = '生成中';
+  try {
+    const poster = await prepareSharePoster(data, activeDetailSpot);
+    if (sharePosterUrl) URL.revokeObjectURL(sharePosterUrl);
+    sharePosterUrl = URL.createObjectURL(poster.blob);
+    sharePosterFile = typeof File === 'function'
+      ? new File([poster.blob], poster.fileName, { type: poster.blob.type, lastModified: Date.now() })
+      : null;
+    const preview = document.getElementById('share-poster-preview');
+    const download = document.getElementById('share-poster-download');
+    const systemButton = document.getElementById('share-system-button');
+    preview.src = sharePosterUrl;
+    download.href = sharePosterUrl;
+    download.download = poster.fileName;
+    systemButton.querySelector('span').textContent = canSharePosterFile(sharePosterFile) ? '分享到应用' : '保存后分享';
+    systemButton.dataset.shareTitle = poster.title;
+    document.getElementById('share-poster-modal').hidden = false;
+    document.body.classList.add('modal-open');
+    systemButton.focus();
+    setTimeout(() => lucide.createIcons(), 30);
+  } catch (error) {
+    showToast(error.message || '长图生成失败，请稍后重试');
+  } finally {
+    button.disabled = false;
+    label.textContent = '分享长图';
+  }
+}
+
+async function sharePreparedPoster() {
+  const button = document.getElementById('share-system-button');
+  if (canSharePosterFile(sharePosterFile)) {
+    try {
+      await navigator.share({
+        files: [sharePosterFile],
+        title: button.dataset.shareTitle || '晚霞摄影指南',
+        text: '来自 sunsetpredict.cloud 的晚霞摄影指南',
+      });
+      showToast('已打开系统分享面板');
+    } catch (error) {
+      if (error.name !== 'AbortError') showToast('分享未完成，可先保存长图');
+    }
+    return;
+  }
+  document.getElementById('share-poster-download').click();
+  showToast('长图已保存，可发送到微信、朋友圈或小红书');
+}
+
 function renderPartnerCard(data, spotId) {
   const card = document.getElementById('partner-card-open');
   const isRecruiting = !data;
@@ -1104,6 +1475,7 @@ function renderDetailContent(data, spotId) {
   alpenglow.innerHTML = data.alpenglow?.available
     ? `<span class="alpenglow-badge"><i data-lucide="sparkles" style="width:12px;height:12px"></i> ${data.alpenglow.desc}</span>`
     : '';
+  prepareSharePoster(data, spotId).catch(() => {});
   setTimeout(() => lucide.createIcons(), 60);
 }
 
