@@ -229,7 +229,8 @@ if grep -Eq 'id="verdict-panel"|今日判断' /tmp/sunset-v2-public-index.html; 
   echo "Verdict module still present" >&2
   exit 1
 fi
-if grep -Eq 'id="color-tag"|id="color-dot"|id="color-label"|银灰雾霭' /tmp/sunset-v2-public-index.html; then
+if grep -Eq 'id="color-tag"|id="color-dot"|id="color-label"' /tmp/sunset-v2-public-index.html \
+  || grep -q '银灰雾霭' "$release_dir/frontend/index.html"; then
   echo "Legacy Xihu color tag still present" >&2
   exit 1
 fi
