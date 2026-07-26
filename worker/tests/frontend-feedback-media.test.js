@@ -9,11 +9,12 @@ const app = fs.readFileSync(path.join(root, 'frontend/js/app.js'), 'utf8');
 const styles = fs.readFileSync(path.join(root, 'frontend/css/styles.css'), 'utf8');
 const nginx = fs.readFileSync(path.join(root, 'deploy/sunset.conf'), 'utf8');
 
-test('实况反馈提供单图上传、预览、移除与300字评论', () => {
+test('地区留言只保留单图上传与300字评论', () => {
   assert.match(html, /id="feedback-photo"[^>]+accept="image\/jpeg,image\/png,image\/webp"/);
   assert.match(html, /id="feedback-photo-preview"/);
   assert.match(html, /id="feedback-photo-remove"/);
   assert.match(html, /id="feedback-comment" maxlength="300"/);
+  assert.doesNotMatch(html, /data-feedback-(?:observed|quality)|看到了|没看到|现场记录/);
   assert.match(styles, /\.feedback-photo-preview/);
   assert.match(styles, /#feedback-comment/);
 });
@@ -24,6 +25,17 @@ test('浏览器压缩照片、移除EXIF并只向业务接口提交内容', () =
   assert.match(app, /FEEDBACK_MAX_PHOTO_BYTES = 1_200_000/);
   assert.match(app, /payload\.photo = \{ dataUrl: feedbackDraft\.photoDataUrl \}/);
   assert.doesNotMatch(app, /trackUmamiEvent\([^)]*(comment|photoDataUrl|actualQuality|observed)/);
+});
+
+test('详情最底部按地区展示跨日期留言并支持分页', () => {
+  assert.match(html, /id="spot-messages-list"/);
+  assert.match(html, /id="spot-messages-more"/);
+  assert.match(html, /全部照片与评论，不按日期筛选/);
+  assert.match(styles, /\.spot-messages__list/);
+  assert.match(styles, /\.spot-message__image/);
+  assert.match(app, /async function loadSpotMessages/);
+  assert.match(app, /comment\.textContent = message\.comment/);
+  assert.match(app, /new URLSearchParams\(\{ spot: spotId, limit:/);
 });
 
 test('上传链路允许压缩后的JSON体积但仍限制请求上限', () => {

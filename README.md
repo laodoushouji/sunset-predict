@@ -48,7 +48,9 @@ node --test worker/tests/*.test.js
 | `GET /api/spots` | 其余 8 个站点聚合预测 |
 | `GET /api/spot/:slug` | 单站预测 |
 | `GET /api/timeline` | 昨天至后天的统一时间线 |
-| `POST /api/feedback` | 匿名提交是否看到晚霞与实际质量 |
+| `GET /api/feedback?spot=:slug` | 按站点分页读取全部历史照片与评论 |
+| `POST /api/feedback` | 匿名发布站点照片或评论 |
+| `GET /api/feedback/photo/:date/:file` | 读取留言照片 |
 | `GET /health` | 服务健康检查 |
 
 ## 环境变量
@@ -61,7 +63,7 @@ node --test worker/tests/*.test.js
 | `PORT` | Node 监听端口，本地默认 3001，生产为 3003 |
 | `APP_ROOT` | 项目根目录 |
 | `HISTORY_ROOT` | 历史快照目录 |
-| `FEEDBACK_ROOT` | 匿名实况反馈目录 |
+| `FEEDBACK_ROOT` | 匿名地区留言目录 |
 | `CACHE_ROOT` | 全国站最近成功快照目录 |
 
 `.env` 已被 Git 忽略。Token 不得写入前端、源码、测试输出或提交记录。

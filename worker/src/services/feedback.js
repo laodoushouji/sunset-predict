@@ -6,13 +6,6 @@ const FEEDBACK_SPOTS = new Set([
   'xihu', 'waitan', 'beijing', 'erhai', 'chongqing',
   'xiamen', 'qingdao', 'chengdu', 'shenzhen', 'huangshan',
 ]);
-const QUALITY_LEVELS = new Map([
-  [20, '平淡'],
-  [40, '微霞'],
-  [60, '不错'],
-  [80, '很棒'],
-  [95, '爆燃'],
-]);
 const MAX_COMMENT_LENGTH = 300;
 const MAX_PHOTO_BYTES = 1_200_000;
 const PHOTO_EXTENSIONS = new Map([
@@ -94,12 +87,6 @@ function normalizeFeedbackPayload(input = {}) {
   if (!FEEDBACK_SPOTS.has(spot)) throw new FeedbackError('站点无效');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new FeedbackError('日期无效');
   if (!/^[a-zA-Z0-9_-]{16,80}$/.test(clientId)) throw new FeedbackError('匿名标识无效');
-  if (typeof input.observed !== 'boolean') throw new FeedbackError('请选择今晚是否看到晚霞');
-
-  const actualQuality = input.observed ? Number(input.actualQuality) : 0;
-  if (input.observed && !QUALITY_LEVELS.has(actualQuality)) {
-    throw new FeedbackError('请选择实际质量');
-  }
   const comment = String(input.comment || '').replace(/\r\n?/g, '\n').trim();
   if (comment.length > MAX_COMMENT_LENGTH) {
     throw new FeedbackError(`评论请控制在 ${MAX_COMMENT_LENGTH} 字以内`);
@@ -113,9 +100,6 @@ function normalizeFeedbackPayload(input = {}) {
     spot,
     date,
     clientId,
-    observed: input.observed,
-    actualQuality,
-    actualQualityLabel: input.observed ? QUALITY_LEVELS.get(actualQuality) : '未观测到',
     comment,
     photo,
     photoAction: photo ? 'replace' : input.removePhoto ? 'remove' : 'keep',
@@ -184,18 +168,30 @@ async function saveFeedback(root, payload, prediction, recordedAt = new Date()) 
   } else if (normalized.photoAction === 'remove') {
     photo = null;
   }
+  if (!normalized.comment && !photo) {
+    throw new FeedbackError('请上传照片或填写评论');
+  }
+
+  const legacyGroundTruth = previousRecord?.legacyGroundTruth || (
+    typeof previousRecord?.observed === 'boolean'
+      ? {
+          observed: previousRecord.observed,
+          actualQuality: previousRecord.actualQuality,
+          actualQualityLabel: previousRecord.actualQualityLabel,
+        }
+      : null
+  );
 
   const record = {
-    schemaVersion: 2,
+    schemaVersion: 3,
+    kind: 'spot-message',
     responseKey,
     respondentHash,
     spot: normalized.spot,
     date: normalized.date,
-    observed: normalized.observed,
-    actualQuality: normalized.actualQuality,
-    actualQualityLabel: normalized.actualQualityLabel,
     comment: normalized.comment,
     photo,
+    legacyGroundTruth,
     prediction: predictionSnapshot(prediction),
     recordedAt: recordedAt.toISOString(),
   };
@@ -212,16 +208,91 @@ async function saveFeedback(root, payload, prediction, recordedAt = new Date()) 
   return { updated, record };
 }
 
+function publicPhotoUrl(photo) {
+  const match = String(photo?.file || '').match(/^(\d{4}-\d{2}-\d{2})\/images\/([a-f0-9]{64}\.(?:jpg|png|webp))$/);
+  return match ? `/api/feedback/photo/${match[1]}/${match[2]}` : null;
+}
+
+async function loadFeedbackMessages(root, spot) {
+  if (!FEEDBACK_SPOTS.has(spot)) throw new FeedbackError('站点无效');
+  let dateEntries;
+  try {
+    dateEntries = await fs.readdir(root, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  }
+  const dates = dateEntries
+    .filter(entry => entry.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(entry.name))
+    .map(entry => entry.name);
+  const records = (await Promise.all(dates.map(async date => {
+    const directory = path.join(root, date);
+    const names = await fs.readdir(directory);
+    return Promise.all(names
+      .filter(name => /^[a-f0-9]{64}\.json$/.test(name))
+      .map(async name => {
+        try {
+          return JSON.parse(await fs.readFile(path.join(directory, name), 'utf8'));
+        } catch {
+          return null;
+        }
+      }));
+  }))).flat();
+
+  return records
+    .filter(record => record?.spot === spot && (record.comment || publicPhotoUrl(record.photo)))
+    .map(record => ({
+      id: record.responseKey,
+      spot: record.spot,
+      date: record.date,
+      comment: String(record.comment || '').slice(0, MAX_COMMENT_LENGTH),
+      photoUrl: publicPhotoUrl(record.photo),
+      recordedAt: record.recordedAt,
+    }))
+    .sort((a, b) => String(b.recordedAt).localeCompare(String(a.recordedAt)) || b.id.localeCompare(a.id));
+}
+
+function paginateFeedbackMessages(messages, cursor, requestedLimit) {
+  const offset = /^\d+$/.test(String(cursor || '0')) ? Number(cursor || 0) : 0;
+  const limit = Math.min(50, Math.max(1, Number(requestedLimit) || 20));
+  const items = messages.slice(offset, offset + limit);
+  const nextOffset = offset + items.length;
+  return {
+    items,
+    total: messages.length,
+    nextCursor: nextOffset < messages.length ? String(nextOffset) : null,
+  };
+}
+
+async function loadFeedbackPhoto(root, date, filename) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') ||
+      !/^[a-f0-9]{64}\.(jpg|png|webp)$/.test(filename || '')) {
+    throw new FeedbackError('图片地址无效', 404, 'PHOTO_NOT_FOUND');
+  }
+  const extension = path.extname(filename).slice(1);
+  try {
+    return {
+      body: await fs.readFile(path.join(root, date, 'images', filename)),
+      contentType: extension === 'jpg' ? 'image/jpeg' : `image/${extension}`,
+    };
+  } catch (error) {
+    if (error.code === 'ENOENT') throw new FeedbackError('图片不存在', 404, 'PHOTO_NOT_FOUND');
+    throw error;
+  }
+}
+
 module.exports = {
   FEEDBACK_SPOTS,
-  QUALITY_LEVELS,
   MAX_COMMENT_LENGTH,
   MAX_PHOTO_BYTES,
   FeedbackError,
   feedbackAvailability,
   findPredictionInTimeline,
+  loadFeedbackMessages,
+  loadFeedbackPhoto,
   normalizeFeedbackPayload,
   normalizePhoto,
+  paginateFeedbackMessages,
   predictionSnapshot,
   saveFeedback,
   shanghaiClock,

@@ -15,7 +15,10 @@ const {
   FeedbackError,
   feedbackAvailability,
   findPredictionInTimeline,
+  loadFeedbackMessages,
+  loadFeedbackPhoto,
   normalizeFeedbackPayload,
+  paginateFeedbackMessages,
   saveFeedback,
 } = require('./services/feedback');
 
@@ -28,6 +31,7 @@ const CACHE_ROOT = process.env.CACHE_ROOT || path.join(APP_ROOT, 'data/cache');
 const REGIONAL_CACHE_FILE = path.join(CACHE_ROOT, 'regional-latest.json');
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const cache = createMemoryCache(CACHE_TTL_MS);
+const feedbackCache = createMemoryCache(30 * 1000);
 
 const STATIC_FILES = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
@@ -152,13 +156,14 @@ const server = http.createServer(async (request, response) => {
           throw new FeedbackError(availability.reason, 409, availability.code);
         }
         const saved = await saveFeedback(FEEDBACK_ROOT, rawPayload, prediction);
+        feedbackCache.delete(payload.spot);
         sendPrivateJson(response, 200, {
           ok: true,
           updated: saved.updated,
           photoSaved: Boolean(saved.record.photo),
           commentSaved: Boolean(saved.record.comment),
           recordedAt: saved.record.recordedAt,
-          message: '实况已记录，感谢你帮助模型变准。',
+          message: '留言已发布。',
         });
       } catch (error) {
         if (error instanceof FeedbackError) {
@@ -175,8 +180,28 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    const feedbackPhotoMatch = url.pathname.match(/^\/api\/feedback\/photo\/(\d{4}-\d{2}-\d{2})\/([a-f0-9]{64}\.(?:jpg|png|webp))$/);
+    if (feedbackPhotoMatch) {
+      const photo = await loadFeedbackPhoto(FEEDBACK_ROOT, feedbackPhotoMatch[1], feedbackPhotoMatch[2]);
+      send(response, 200, photo.body, {
+        'content-type': photo.contentType,
+        'cache-control': 'public, max-age=300',
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/feedback' || url.pathname === '/api/feedback/') {
+      const spot = String(url.searchParams.get('spot') || '');
+      const messages = await feedbackCache.get(spot, () => loadFeedbackMessages(FEEDBACK_ROOT, spot));
+      sendJson(response, 200, {
+        spot,
+        ...paginateFeedbackMessages(messages, url.searchParams.get('cursor'), url.searchParams.get('limit')),
+      });
+      return;
+    }
+
     if (url.pathname === '/health') {
-      sendJson(response, 200, { ok: true, services: ['xihu-v3', 'waitan-v4', 'regional-v3', 'qweather-weather-v1', 'blue-hour-v1', 'timeline-v2', 'feedback-v2', 'frontend-bootstrap-v1'] });
+      sendJson(response, 200, { ok: true, services: ['xihu-v3', 'waitan-v4', 'regional-v3', 'qweather-weather-v1', 'blue-hour-v1', 'timeline-v2', 'feedback-v3', 'frontend-bootstrap-v1'] });
       return;
     }
 
@@ -217,6 +242,10 @@ const server = http.createServer(async (request, response) => {
     if (await serveStatic(url.pathname, response)) return;
     sendJson(response, 404, { error: 'Not found' });
   } catch (error) {
+    if (error instanceof FeedbackError) {
+      sendPrivateJson(response, error.status, { error: error.message, code: error.code });
+      return;
+    }
     sendJson(response, 502, { error: 'Prediction service unavailable', detail: error.message });
   }
 });

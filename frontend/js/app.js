@@ -32,8 +32,6 @@ const feedbackDraft = {
   data: null,
   open: false,
   reason: '',
-  observed: null,
-  actualQuality: null,
   comment: '',
   photoDataUrl: null,
   hasStoredPhoto: false,
@@ -43,12 +41,19 @@ const feedbackDraft = {
   submitting: false,
   error: '',
 };
-const FEEDBACK_QUALITY_LABELS = new Map([
-  [20, '平淡'], [40, '微霞'], [60, '不错'], [80, '很棒'], [95, '爆燃'],
-]);
 const FEEDBACK_PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const FEEDBACK_MAX_SOURCE_BYTES = 12 * 1024 * 1024;
 const FEEDBACK_MAX_PHOTO_BYTES = 1_200_000;
+const FEEDBACK_PAGE_SIZE = 20;
+const feedbackMessages = {
+  spot: null,
+  items: [],
+  total: 0,
+  cursor: null,
+  loading: false,
+  requestId: 0,
+  error: '',
+};
 
 async function fetchApi(url, timeoutMs) {
   let lastError;
@@ -359,21 +364,18 @@ function bindEvents() {
     }
   });
 
-  document.querySelectorAll('[data-feedback-observed]').forEach(button => {
-    button.addEventListener('click', () => selectFeedbackObserved(button.dataset.feedbackObserved === 'true'));
-  });
-  document.querySelectorAll('[data-feedback-quality]').forEach(button => {
-    button.addEventListener('click', () => selectFeedbackQuality(Number(button.dataset.feedbackQuality)));
-  });
   document.getElementById('feedback-photo').addEventListener('change', handleFeedbackPhoto);
   document.getElementById('feedback-photo-remove').addEventListener('click', removeFeedbackPhoto);
   document.getElementById('feedback-comment').addEventListener('input', event => {
     feedbackDraft.comment = event.target.value;
     feedbackDraft.submitted = false;
     feedbackDraft.error = '';
-    document.getElementById('feedback-comment-count').textContent = String(feedbackDraft.comment.length);
+    renderFeedbackDraft();
   });
-  document.getElementById('feedback-submit').addEventListener('click', submitObservationFeedback);
+  document.getElementById('feedback-submit').addEventListener('click', submitSpotMessage);
+  document.getElementById('spot-messages-more').addEventListener('click', () => {
+    if (feedbackMessages.spot) loadSpotMessages(feedbackMessages.spot);
+  });
 
   const supportOpen = document.getElementById('wechat-support-open');
   const supportModal = document.getElementById('wechat-support-modal');
@@ -1334,7 +1336,7 @@ function feedbackStorageKey(spot, date) {
 function getStoredFeedback(spot, date) {
   try {
     const value = JSON.parse(localStorage.getItem(feedbackStorageKey(spot, date)) || 'null');
-    return value && typeof value.observed === 'boolean' ? value : null;
+    return value && (typeof value.comment === 'string' || value.hasPhoto === true) ? value : null;
   } catch {
     return null;
   }
@@ -1355,18 +1357,14 @@ function getFeedbackClientId() {
   return ephemeralFeedbackClientId;
 }
 
-function feedbackAvailabilityFor(data) {
-  const date = data?.date;
-  if (!date) return { open: false, reason: '日期数据不足' };
+function currentShanghaiDate() {
   const clockParts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Shanghai',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
   }).formatToParts(new Date()).filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
-  const today = `${clockParts.year}-${clockParts.month}-${clockParts.day}`;
-  if (date > today) return { open: false, reason: '未来日期暂不能反馈' };
-  return { open: true, reason: '' };
+  return `${clockParts.year}-${clockParts.month}-${clockParts.day}`;
 }
 
 function loadFeedbackImage(file) {
@@ -1464,7 +1462,6 @@ function removeFeedbackPhoto() {
 }
 
 function renderFeedbackDraft() {
-  const quality = document.getElementById('feedback-quality');
   const submit = document.getElementById('feedback-submit');
   const status = document.getElementById('feedback-status');
   const photoInput = document.getElementById('feedback-photo');
@@ -1475,26 +1472,18 @@ function renderFeedbackDraft() {
   const photoRemove = document.getElementById('feedback-photo-remove');
   const comment = document.getElementById('feedback-comment');
   const disabled = !feedbackDraft.open || feedbackDraft.submitting || feedbackDraft.processingPhoto;
-  document.querySelectorAll('[data-feedback-observed]').forEach(button => {
-    const selected = (button.dataset.feedbackObserved === 'true') === feedbackDraft.observed;
-    button.classList.toggle('is-selected', feedbackDraft.observed !== null && selected);
-    button.disabled = disabled;
-    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
-  });
-  document.querySelectorAll('[data-feedback-quality]').forEach(button => {
-    const selected = Number(button.dataset.feedbackQuality) === feedbackDraft.actualQuality;
-    button.classList.toggle('is-selected', selected);
-    button.disabled = disabled;
-    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
-  });
-  quality.hidden = feedbackDraft.observed !== true;
   photoInput.disabled = disabled;
   photoPicker.classList.toggle('is-disabled', disabled);
   photoPicker.setAttribute('aria-disabled', disabled ? 'true' : 'false');
   photoPreview.hidden = !feedbackDraft.photoDataUrl && !feedbackDraft.hasStoredPhoto;
   photoImage.hidden = !feedbackDraft.photoDataUrl;
-  if (feedbackDraft.photoDataUrl) photoImage.src = feedbackDraft.photoDataUrl;
-  else photoImage.removeAttribute('src');
+  if (feedbackDraft.photoDataUrl) {
+    if (photoImage.getAttribute('src') !== feedbackDraft.photoDataUrl) {
+      photoImage.src = feedbackDraft.photoDataUrl;
+    }
+  } else {
+    photoImage.removeAttribute('src');
+  }
   photoStatus.textContent = feedbackDraft.photoDataUrl
     ? '照片已压缩并移除定位信息'
     : '已上传实况照片 · 选择新照片可替换';
@@ -1502,34 +1491,27 @@ function renderFeedbackDraft() {
   photoRemove.disabled = disabled;
   comment.disabled = disabled;
   document.getElementById('feedback-comment-count').textContent = String(feedbackDraft.comment.length);
-  submit.disabled = disabled || feedbackDraft.observed === null ||
-    (feedbackDraft.observed === true && !FEEDBACK_QUALITY_LABELS.has(feedbackDraft.actualQuality));
-  submit.textContent = feedbackDraft.submitting ? '正在上传…' : feedbackDraft.submitted ? '更新实况' : '提交实况';
+  const hasContent = Boolean(feedbackDraft.comment.trim() || feedbackDraft.photoDataUrl || feedbackDraft.hasStoredPhoto);
+  submit.disabled = disabled || !hasContent;
+  submit.textContent = feedbackDraft.submitting ? '正在发布…' : feedbackDraft.submitted ? '更新留言' : '发布留言';
 
   if (!feedbackDraft.open) status.textContent = feedbackDraft.reason;
   else if (feedbackDraft.error) status.textContent = feedbackDraft.error;
   else if (feedbackDraft.processingPhoto) status.textContent = '正在压缩照片并移除 EXIF…';
-  else if (feedbackDraft.submitted) {
-    const result = feedbackDraft.observed
-      ? `看到了 · ${FEEDBACK_QUALITY_LABELS.get(feedbackDraft.actualQuality)}`
-      : '没有看到晚霞';
-    status.textContent = `已记录：${result}。你可以继续修改。`;
-  } else if (feedbackDraft.observed === true && !feedbackDraft.actualQuality) status.textContent = '再选择今晚晚霞的实际质量。';
-  else status.textContent = '选择真实结果后提交。';
+  else if (feedbackDraft.submitted) status.textContent = '留言已发布，你可以继续修改。';
+  else status.textContent = '上传照片或填写评论后发布。';
 }
 
 function renderFeedbackPanel(data, spotId) {
-  const availability = feedbackAvailabilityFor(data);
-  const stored = getStoredFeedback(spotId, data.date);
+  const date = currentShanghaiDate();
+  const stored = getStoredFeedback(spotId, date);
   const comment = typeof stored?.comment === 'string' ? stored.comment.slice(0, 300) : '';
   Object.assign(feedbackDraft, {
     spot: spotId,
-    date: data.date,
+    date,
     data,
-    open: availability.open,
-    reason: availability.reason,
-    observed: stored?.observed ?? null,
-    actualQuality: stored?.actualQuality ?? null,
+    open: true,
+    reason: '',
     comment,
     photoDataUrl: null,
     hasStoredPhoto: Boolean(stored?.hasPhoto),
@@ -1544,27 +1526,9 @@ function renderFeedbackPanel(data, spotId) {
   renderFeedbackDraft();
 }
 
-function selectFeedbackObserved(observed) {
-  if (!feedbackDraft.open || feedbackDraft.submitting) return;
-  feedbackDraft.observed = observed;
-  if (!observed) feedbackDraft.actualQuality = 0;
-  if (observed && feedbackDraft.actualQuality === 0) feedbackDraft.actualQuality = null;
-  feedbackDraft.submitted = false;
-  feedbackDraft.error = '';
-  renderFeedbackDraft();
-}
-
-function selectFeedbackQuality(actualQuality) {
-  if (!feedbackDraft.open || feedbackDraft.submitting || !FEEDBACK_QUALITY_LABELS.has(actualQuality)) return;
-  feedbackDraft.observed = true;
-  feedbackDraft.actualQuality = actualQuality;
-  feedbackDraft.submitted = false;
-  feedbackDraft.error = '';
-  renderFeedbackDraft();
-}
-
-async function submitObservationFeedback() {
-  if (!feedbackDraft.open || feedbackDraft.submitting || feedbackDraft.observed === null) return;
+async function submitSpotMessage() {
+  if (!feedbackDraft.open || feedbackDraft.submitting ||
+      (!feedbackDraft.comment.trim() && !feedbackDraft.photoDataUrl && !feedbackDraft.hasStoredPhoto)) return;
   feedbackDraft.submitting = true;
   feedbackDraft.error = '';
   renderFeedbackDraft();
@@ -1573,8 +1537,6 @@ async function submitObservationFeedback() {
       spot: feedbackDraft.spot,
       date: feedbackDraft.date,
       clientId: getFeedbackClientId(),
-      observed: feedbackDraft.observed,
-      actualQuality: feedbackDraft.observed ? feedbackDraft.actualQuality : 0,
       comment: feedbackDraft.comment,
     };
     if (feedbackDraft.photoDataUrl) payload.photo = { dataUrl: feedbackDraft.photoDataUrl };
@@ -1585,12 +1547,10 @@ async function submitObservationFeedback() {
       body: JSON.stringify(payload),
     });
     const result = await response.json().catch(() => ({
-      error: response.status === 413 ? '照片过大，请换一张较小的图片' : '实况提交失败',
+      error: response.status === 413 ? '照片过大，请换一张较小的图片' : '留言发布失败',
     }));
-    if (!response.ok) throw new Error(result.error || '实况提交失败');
+    if (!response.ok) throw new Error(result.error || '留言发布失败');
     const stored = {
-      observed: feedbackDraft.observed,
-      actualQuality: feedbackDraft.actualQuality,
       comment: feedbackDraft.comment,
       hasPhoto: result.photoSaved,
       recordedAt: result.recordedAt,
@@ -1603,12 +1563,110 @@ async function submitObservationFeedback() {
     feedbackDraft.removePhoto = false;
     feedbackDraft.submitted = true;
     trackUmamiEvent('feedback-submit', feedbackDraft.spot);
-    showToast(result.message || '实况已记录');
+    showToast(result.message || '留言已发布');
+    loadSpotMessages(feedbackDraft.spot, true);
   } catch (error) {
     feedbackDraft.error = error.message;
   } finally {
     feedbackDraft.submitting = false;
     renderFeedbackDraft();
+  }
+}
+
+function formatSpotMessageTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+}
+
+function createSpotMessageElement(message, spotName) {
+  const article = document.createElement('article');
+  article.className = 'spot-message';
+
+  const meta = document.createElement('div');
+  meta.className = 'spot-message__meta';
+  const author = document.createElement('span');
+  author.textContent = '一位晚霞观测者';
+  const time = document.createElement('time');
+  time.dateTime = message.recordedAt || '';
+  time.textContent = formatSpotMessageTime(message.recordedAt);
+  meta.append(author, time);
+  article.append(meta);
+
+  if (message.photoUrl) {
+    const image = document.createElement('img');
+    image.className = 'spot-message__image';
+    image.src = message.photoUrl;
+    image.alt = `${spotName}现场留言照片`;
+    image.loading = 'lazy';
+    image.decoding = 'async';
+    article.append(image);
+  }
+  if (message.comment) {
+    const comment = document.createElement('p');
+    comment.textContent = message.comment;
+    article.append(comment);
+  }
+  return article;
+}
+
+function renderSpotMessages() {
+  const list = document.getElementById('spot-messages-list');
+  const status = document.getElementById('spot-messages-status');
+  const more = document.getElementById('spot-messages-more');
+  const spotName = DETAIL_SPOTS[feedbackMessages.spot]?.name || '这个地区';
+  list.replaceChildren(...feedbackMessages.items.map(item => createSpotMessageElement(item, spotName)));
+  if (feedbackMessages.error && !feedbackMessages.items.length) status.textContent = feedbackMessages.error;
+  else if (feedbackMessages.loading && !feedbackMessages.items.length) status.textContent = '正在读取留言…';
+  else if (!feedbackMessages.items.length) status.textContent = `还没有关于${spotName}的留言，来留下第一条吧。`;
+  else status.textContent = `共 ${feedbackMessages.total} 条留言`;
+  more.hidden = !feedbackMessages.cursor;
+  more.disabled = feedbackMessages.loading;
+  more.textContent = feedbackMessages.loading ? '正在加载…' : '加载更多';
+}
+
+async function loadSpotMessages(spotId, reset = false) {
+  if (!reset && feedbackMessages.loading) return;
+  if (reset) {
+    feedbackMessages.spot = spotId;
+    feedbackMessages.items = [];
+    feedbackMessages.total = 0;
+    feedbackMessages.cursor = null;
+    feedbackMessages.error = '';
+  }
+  const requestId = ++feedbackMessages.requestId;
+  const cursor = reset ? null : feedbackMessages.cursor;
+  feedbackMessages.loading = true;
+  feedbackMessages.error = '';
+  renderSpotMessages();
+  try {
+    const params = new URLSearchParams({ spot: spotId, limit: String(FEEDBACK_PAGE_SIZE) });
+    if (cursor) params.set('cursor', cursor);
+    const response = await fetchApi(`${FEEDBACK_API_URL}?${params}`, 10000);
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || '留言读取失败');
+    if (requestId !== feedbackMessages.requestId || feedbackMessages.spot !== spotId) return;
+    const known = new Set(feedbackMessages.items.map(item => item.id));
+    const incoming = (result.items || []).filter(item => !known.has(item.id));
+    feedbackMessages.items.push(...incoming);
+    feedbackMessages.total = Number(result.total) || feedbackMessages.items.length;
+    feedbackMessages.cursor = result.nextCursor || null;
+  } catch (error) {
+    if (requestId === feedbackMessages.requestId) {
+      feedbackMessages.error = error.message;
+    }
+  } finally {
+    if (requestId === feedbackMessages.requestId) {
+      feedbackMessages.loading = false;
+      renderSpotMessages();
+    }
   }
 }
 
@@ -1621,6 +1679,9 @@ function renderDetailContent(data, spotId) {
   document.getElementById('guide-title').textContent = `${dayLabel} · ${meta.name}摄影指南`;
   document.getElementById('detail-overlay').setAttribute('aria-label', `关闭${meta.name}摄影指南`);
   renderPartnerCard(advertiserData, spotId);
+  document.getElementById('spot-messages-title').textContent = `${meta.name}留言`;
+  document.getElementById('spot-messages-intro').textContent = `这里汇集关于${meta.name}的全部照片与评论，不按日期筛选。`;
+  loadSpotMessages(spotId, true);
 
   renderDetailMetrics(data, score, grade, spotId);
   renderSunsetWindow(data);
