@@ -13,7 +13,7 @@ test('详情抽屉提供分享长图入口与微信内保存预览', () => {
   assert.match(html, /id="share-poster-preview"/);
   assert.match(html, /id="share-system-button"/);
   assert.match(html, /id="share-poster-download"/);
-  assert.match(html, /微信内可长按图片保存/);
+  assert.match(html, /微信内也可长按保存/);
 });
 
 test('分享海报使用1080x1920同源景区图并包含核心摄影信息', () => {
@@ -31,7 +31,10 @@ test('分享海报使用1080x1920同源景区图并包含核心摄影信息', ()
 });
 
 test('支持系统文件分享并在不支持时降级保存长图', () => {
+  assert.match(app, /navigator\.maxTouchPoints > 0/);
+  assert.match(app, /window\.matchMedia\?\.\('\(pointer: coarse\)'\)\.matches/);
   assert.match(app, /navigator\.canShare\(\{ files: \[file\] \}\)/);
   assert.match(app, /navigator\.share\(\{[\s\S]*?files: \[sharePosterFile\]/);
   assert.match(app, /getElementById\('share-poster-download'\)\.click\(\)/);
+  assert.match(html, /电脑端请先保存长图/);
 });

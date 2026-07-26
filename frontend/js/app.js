@@ -1116,7 +1116,10 @@ function prepareSharePoster(data, spotId) {
 }
 
 function canSharePosterFile(file) {
-  if (!file || typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return false;
+  const touchDevice = navigator.maxTouchPoints > 0 || window.matchMedia?.('(pointer: coarse)').matches;
+  if (!touchDevice || !file || typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') {
+    return false;
+  }
   try {
     return navigator.canShare({ files: [file] });
   } catch {
