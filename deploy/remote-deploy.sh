@@ -179,8 +179,8 @@ grep -q "全国摄影站" /tmp/sunset-v2-public-index.html
 grep -q "detail-overlay" /tmp/sunset-v2-public-index.html
 grep -q "物理层拆解" /tmp/sunset-v2-public-index.html
 grep -q "作者碎碎念" /tmp/sunset-v2-public-index.html
-grep -q "css/styles.css?v=20260719-instant-weather-v30" /tmp/sunset-v2-public-index.html
-grep -q "js/app.js?v=20260719-instant-weather-v30" /tmp/sunset-v2-public-index.html
+grep -q "css/styles.css?v=20260726-observation-media-v31" /tmp/sunset-v2-public-index.html
+grep -q "js/app.js?v=20260726-observation-media-v31" /tmp/sunset-v2-public-index.html
 grep -q '<script async src="https://unpkg.com/lucide@1.25.0/dist/umd/lucide.min.js"></script>' /tmp/sunset-v2-public-index.html
 grep -Eq 'id="forecast-bootstrap" type="application/json">\{"today":"[0-9]{4}-[0-9]{2}-[0-9]{2}"' /tmp/sunset-v2-public-index.html
 if grep -q 'cdn.tailwindcss.com' /tmp/sunset-v2-public-index.html; then
@@ -196,6 +196,9 @@ grep -q 'id="sunset-window-track"' /tmp/sunset-v2-public-index.html
 grep -q 'id="sunset-window-details"' /tmp/sunset-v2-public-index.html
 grep -q 'id="feedback-title"' /tmp/sunset-v2-public-index.html
 grep -q 'id="feedback-submit"' /tmp/sunset-v2-public-index.html
+grep -q 'id="feedback-photo"' /tmp/sunset-v2-public-index.html
+grep -q 'id="feedback-comment"' /tmp/sunset-v2-public-index.html
+grep -q 'maxlength="300"' /tmp/sunset-v2-public-index.html
 grep -q 'id="detail-share"' /tmp/sunset-v2-public-index.html
 grep -q 'id="share-poster-modal"' /tmp/sunset-v2-public-index.html
 grep -q 'id="share-system-button"' /tmp/sunset-v2-public-index.html
@@ -270,6 +273,8 @@ grep -q "grid-template-rows: auto minmax(0, 1fr) 38px 22px 4px 28px" /tmp/sunset
 grep -q "probability-pill.high" /tmp/sunset-v2-public-styles.css
 grep -q ".weather-badge.rain-heavy" /tmp/sunset-v2-public-styles.css
 grep -q ".observation-feedback" /tmp/sunset-v2-public-styles.css
+grep -q ".feedback-photo-preview" /tmp/sunset-v2-public-styles.css
+grep -q "#feedback-comment" /tmp/sunset-v2-public-styles.css
 grep -q ".blue-hour__card" /tmp/sunset-v2-public-styles.css
 grep -q "body.blue-hour-active" /tmp/sunset-v2-public-styles.css
 curl -fsS https://sunsetpredict.cloud/js/app.js -o /tmp/sunset-v2-public-app.js
@@ -318,6 +323,8 @@ grep -q "async function sharePreparedPoster" /tmp/sunset-v2-public-app.js
 grep -q "function readForecastBootstrap" /tmp/sunset-v2-public-app.js
 grep -q "function applyTimelinePayload" /tmp/sunset-v2-public-app.js
 grep -q "function submitObservationFeedback" /tmp/sunset-v2-public-app.js
+grep -q "async function compressFeedbackPhoto" /tmp/sunset-v2-public-app.js
+grep -q "async function handleFeedbackPhoto" /tmp/sunset-v2-public-app.js
 grep -q "const FEEDBACK_API_URL = '/api/feedback'" /tmp/sunset-v2-public-app.js
 curl -fsS https://sunsetpredict.cloud/wechat-pay.jpg -o /tmp/sunset-v2-public-qr-check.jpg
 test "$(sha256sum /tmp/sunset-v2-public-qr-check.jpg | awk '{print $1}')" = "963811c8cd09b1a445d4bb97df695c4f1df6fdb51f05bc09fa5ee24ed00203a5"
@@ -352,7 +359,7 @@ for slug in beijing erhai chongqing xiamen qingdao chengdu shenzhen huangshan; d
 done
 "$node_bin" -e "const h=require('/tmp/sunset-v2-public-huangshan.json');if(typeof h.quality==='number'&&(h.dataAvailability?.cloudBaseHeight!=='pressure-level-proxy'||h.sourceStatus?.cloudBaseHeight!=='pressure-level-proxy'))process.exit(1);const x=require('/tmp/sunset-v2-public-xiamen.json');if(typeof x.quality==='number'&&x.dataAvailability?.lowLevelHumidity!=='connected')process.exit(1)"
 curl -fsS https://sunsetpredict.cloud/api/spot/jingshan | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);if(j.spot!=='beijing'||j.source!=='beijing-model-v3'||j.modelVersion!=='quality-v3.1')process.exit(1)})"
-curl -fsS https://sunsetpredict.cloud/health | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);if(j.ok!==true||!j.services?.includes('feedback-v1')||!j.services?.includes('qweather-weather-v1')||!j.services?.includes('blue-hour-v1'))process.exit(1)})"
+curl -fsS https://sunsetpredict.cloud/health | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);if(j.ok!==true||!j.services?.includes('feedback-v2')||!j.services?.includes('qweather-weather-v1')||!j.services?.includes('blue-hour-v1'))process.exit(1)})"
 
 invalid_feedback_status=$(curl -sS -o /tmp/sunset-v2-feedback-invalid.json -w '%{http_code}' \
   -H 'content-type: application/json' -d '{}' https://sunsetpredict.cloud/api/feedback)

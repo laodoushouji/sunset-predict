@@ -35,9 +35,15 @@ test('反馈载荷要求站点、日期、匿名标识与实际质量完整', ()
     clientId: 'anonymous_client_123456',
     observed: true,
     actualQuality: 80,
+    comment: '断桥方向出现了十分钟粉紫色。',
+    photo: {
+      dataUrl: `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64')}`,
+    },
   });
 
   assert.equal(normalized.actualQualityLabel, '很棒');
+  assert.equal(normalized.comment, '断桥方向出现了十分钟粉紫色。');
+  assert.equal(normalized.photo.mimeType, 'image/jpeg');
   assert.throws(
     () => normalizeFeedbackPayload({ ...normalized, clientId: 'short' }),
     FeedbackError
@@ -45,6 +51,17 @@ test('反馈载荷要求站点、日期、匿名标识与实际质量完整', ()
   assert.throws(
     () => normalizeFeedbackPayload({ ...normalized, actualQuality: 73 }),
     /请选择实际质量/
+  );
+  assert.throws(
+    () => normalizeFeedbackPayload({ ...normalized, comment: '晚'.repeat(301) }),
+    /评论请控制在 300 字以内/
+  );
+  assert.throws(
+    () => normalizeFeedbackPayload({
+      ...normalized,
+      photo: { dataUrl: `data:image/png;base64,${Buffer.from('not-a-png').toString('base64')}` },
+    }),
+    /图片内容与格式不一致/
   );
 });
 
@@ -104,4 +121,41 @@ test('同设备同站点同日期更新同一条匿名真值记录', async t => 
   assert.equal(saved.clientId, undefined);
   assert.equal(saved.ip, undefined);
   assert.match(saved.respondentHash, /^[a-f0-9]{64}$/);
+});
+
+test('实况照片独立保存且更新时可保留或移除', async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sunset-feedback-photo-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const base = {
+    spot: 'xihu',
+    date: '2026-07-17',
+    clientId: 'anonymous_client_123456',
+    observed: true,
+    actualQuality: 80,
+    comment: '湖面反光很明显。',
+    photo: {
+      dataUrl: `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64')}`,
+    },
+  };
+
+  const first = await saveFeedback(root, base, prediction);
+  const recordFile = path.join(root, base.date, `${first.record.responseKey}.json`);
+  const firstRecord = JSON.parse(await fs.readFile(recordFile, 'utf8'));
+  const photoFile = path.join(root, firstRecord.photo.file);
+
+  assert.equal(firstRecord.schemaVersion, 2);
+  assert.equal(firstRecord.comment, '湖面反光很明显。');
+  assert.equal(firstRecord.photo.mimeType, 'image/jpeg');
+  assert.equal(firstRecord.photo.dataUrl, undefined);
+  assert.deepEqual([...await fs.readFile(photoFile)], [0xff, 0xd8, 0xff, 0xd9]);
+
+  await saveFeedback(root, { ...base, photo: undefined, comment: '余晖持续约十五分钟。' }, prediction);
+  const keptRecord = JSON.parse(await fs.readFile(recordFile, 'utf8'));
+  assert.equal(keptRecord.photo.file, firstRecord.photo.file);
+  assert.equal(keptRecord.comment, '余晖持续约十五分钟。');
+
+  await saveFeedback(root, { ...base, photo: undefined, removePhoto: true }, prediction);
+  const removedRecord = JSON.parse(await fs.readFile(recordFile, 'utf8'));
+  assert.equal(removedRecord.photo, null);
+  await assert.rejects(fs.access(photoFile), { code: 'ENOENT' });
 });

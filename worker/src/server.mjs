@@ -142,7 +142,8 @@ const server = http.createServer(async (request, response) => {
         return;
       }
       try {
-        const payload = normalizeFeedbackPayload(await readJsonBody(request));
+        const rawPayload = await readJsonBody(request, 2 * 1024 * 1024);
+        const payload = normalizeFeedbackPayload(rawPayload);
         const timeline = await cached('timeline', loadTimeline);
         const prediction = findPredictionInTimeline(timeline, payload.spot, payload.date);
         if (!prediction) throw new FeedbackError('该站点日期没有可校准预测', 404, 'PREDICTION_NOT_FOUND');
@@ -150,10 +151,12 @@ const server = http.createServer(async (request, response) => {
         if (!availability.open) {
           throw new FeedbackError(availability.reason, 409, availability.code);
         }
-        const saved = await saveFeedback(FEEDBACK_ROOT, payload, prediction);
+        const saved = await saveFeedback(FEEDBACK_ROOT, rawPayload, prediction);
         sendPrivateJson(response, 200, {
           ok: true,
           updated: saved.updated,
+          photoSaved: Boolean(saved.record.photo),
+          commentSaved: Boolean(saved.record.comment),
           recordedAt: saved.record.recordedAt,
           message: '实况已记录，感谢你帮助模型变准。',
         });
@@ -173,7 +176,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (url.pathname === '/health') {
-      sendJson(response, 200, { ok: true, services: ['xihu-v3', 'waitan-v4', 'regional-v3', 'qweather-weather-v1', 'blue-hour-v1', 'timeline-v2', 'feedback-v1', 'frontend-bootstrap-v1'] });
+      sendJson(response, 200, { ok: true, services: ['xihu-v3', 'waitan-v4', 'regional-v3', 'qweather-weather-v1', 'blue-hour-v1', 'timeline-v2', 'feedback-v2', 'frontend-bootstrap-v1'] });
       return;
     }
 

@@ -13,6 +13,13 @@ const QUALITY_LEVELS = new Map([
   [80, '很棒'],
   [95, '爆燃'],
 ]);
+const MAX_COMMENT_LENGTH = 300;
+const MAX_PHOTO_BYTES = 1_200_000;
+const PHOTO_EXTENSIONS = new Map([
+  ['image/jpeg', 'jpg'],
+  ['image/png', 'png'],
+  ['image/webp', 'webp'],
+]);
 
 class FeedbackError extends Error {
   constructor(message, status = 400, code = 'INVALID_FEEDBACK') {
@@ -43,6 +50,43 @@ function feedbackAvailability(date, _prediction, now = new Date()) {
   return { open: true, reason: '', code: 'OPEN' };
 }
 
+function photoSignatureMatches(mimeType, bytes) {
+  if (mimeType === 'image/jpeg') {
+    return bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  }
+  if (mimeType === 'image/png') {
+    return bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'));
+  }
+  return bytes.length >= 12 &&
+    bytes.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    bytes.subarray(8, 12).toString('ascii') === 'WEBP';
+}
+
+function normalizePhoto(input) {
+  if (input == null) return null;
+  if (typeof input !== 'object' || typeof input.dataUrl !== 'string') {
+    throw new FeedbackError('图片数据无效');
+  }
+  const match = input.dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([a-zA-Z0-9+/]+={0,2})$/);
+  if (!match) throw new FeedbackError('仅支持 JPEG、PNG 或 WebP 图片');
+  const bytes = Buffer.from(match[2], 'base64');
+  const canonical = bytes.toString('base64').replace(/=+$/, '');
+  if (!bytes.length || canonical !== match[2].replace(/=+$/, '')) {
+    throw new FeedbackError('图片数据无效');
+  }
+  if (bytes.length > MAX_PHOTO_BYTES) {
+    throw new FeedbackError('图片请压缩至 1.2MB 以内', 413, 'PHOTO_TOO_LARGE');
+  }
+  if (!photoSignatureMatches(match[1], bytes)) {
+    throw new FeedbackError('图片内容与格式不一致');
+  }
+  return {
+    mimeType: match[1],
+    extension: PHOTO_EXTENSIONS.get(match[1]),
+    bytes,
+  };
+}
+
 function normalizeFeedbackPayload(input = {}) {
   const spot = String(input.spot || '');
   const date = String(input.date || '');
@@ -56,6 +100,15 @@ function normalizeFeedbackPayload(input = {}) {
   if (input.observed && !QUALITY_LEVELS.has(actualQuality)) {
     throw new FeedbackError('请选择实际质量');
   }
+  const comment = String(input.comment || '').replace(/\r\n?/g, '\n').trim();
+  if (comment.length > MAX_COMMENT_LENGTH) {
+    throw new FeedbackError(`评论请控制在 ${MAX_COMMENT_LENGTH} 字以内`);
+  }
+  if (input.removePhoto != null && typeof input.removePhoto !== 'boolean') {
+    throw new FeedbackError('图片操作无效');
+  }
+  const photo = normalizePhoto(input.photo);
+  if (photo && input.removePhoto) throw new FeedbackError('图片操作冲突');
   return {
     spot,
     date,
@@ -63,6 +116,9 @@ function normalizeFeedbackPayload(input = {}) {
     observed: input.observed,
     actualQuality,
     actualQualityLabel: input.observed ? QUALITY_LEVELS.get(actualQuality) : '未观测到',
+    comment,
+    photo,
+    photoAction: photo ? 'replace' : input.removePhoto ? 'remove' : 'keep',
   };
 }
 
@@ -103,15 +159,34 @@ async function saveFeedback(root, payload, prediction, recordedAt = new Date()) 
   await fs.mkdir(directory, { recursive: true, mode: 0o750 });
 
   let updated = false;
+  let previousRecord = null;
   try {
-    await fs.access(file);
+    previousRecord = JSON.parse(await fs.readFile(file, 'utf8'));
     updated = true;
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
   }
 
+  let photo = previousRecord?.photo || null;
+  if (normalized.photoAction === 'replace') {
+    const imageDirectory = path.join(directory, 'images');
+    const imageFile = path.join(imageDirectory, `${responseKey}.${normalized.photo.extension}`);
+    const imageTemporary = `${imageFile}.${process.pid}-${Date.now()}.tmp`;
+    await fs.mkdir(imageDirectory, { recursive: true, mode: 0o750 });
+    await fs.writeFile(imageTemporary, normalized.photo.bytes, { mode: 0o640 });
+    await fs.rename(imageTemporary, imageFile);
+    photo = {
+      file: path.relative(root, imageFile),
+      mimeType: normalized.photo.mimeType,
+      size: normalized.photo.bytes.length,
+      sha256: crypto.createHash('sha256').update(normalized.photo.bytes).digest('hex'),
+    };
+  } else if (normalized.photoAction === 'remove') {
+    photo = null;
+  }
+
   const record = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     responseKey,
     respondentHash,
     spot: normalized.spot,
@@ -119,21 +194,34 @@ async function saveFeedback(root, payload, prediction, recordedAt = new Date()) 
     observed: normalized.observed,
     actualQuality: normalized.actualQuality,
     actualQualityLabel: normalized.actualQualityLabel,
+    comment: normalized.comment,
+    photo,
     prediction: predictionSnapshot(prediction),
     recordedAt: recordedAt.toISOString(),
   };
   await fs.writeFile(temporary, JSON.stringify(record), { mode: 0o640 });
   await fs.rename(temporary, file);
+
+  const previousPhoto = previousRecord?.photo?.file;
+  if (previousPhoto && previousPhoto !== photo?.file) {
+    const candidate = path.resolve(root, previousPhoto);
+    if (candidate.startsWith(`${path.resolve(root)}${path.sep}`)) {
+      await fs.rm(candidate, { force: true });
+    }
+  }
   return { updated, record };
 }
 
 module.exports = {
   FEEDBACK_SPOTS,
   QUALITY_LEVELS,
+  MAX_COMMENT_LENGTH,
+  MAX_PHOTO_BYTES,
   FeedbackError,
   feedbackAvailability,
   findPredictionInTimeline,
   normalizeFeedbackPayload,
+  normalizePhoto,
   predictionSnapshot,
   saveFeedback,
   shanghaiClock,

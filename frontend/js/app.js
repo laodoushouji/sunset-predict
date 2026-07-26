@@ -34,6 +34,11 @@ const feedbackDraft = {
   reason: '',
   observed: null,
   actualQuality: null,
+  comment: '',
+  photoDataUrl: null,
+  hasStoredPhoto: false,
+  removePhoto: false,
+  processingPhoto: false,
   submitted: false,
   submitting: false,
   error: '',
@@ -41,6 +46,9 @@ const feedbackDraft = {
 const FEEDBACK_QUALITY_LABELS = new Map([
   [20, '平淡'], [40, '微霞'], [60, '不错'], [80, '很棒'], [95, '爆燃'],
 ]);
+const FEEDBACK_PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const FEEDBACK_MAX_SOURCE_BYTES = 12 * 1024 * 1024;
+const FEEDBACK_MAX_PHOTO_BYTES = 1_200_000;
 
 async function fetchApi(url, timeoutMs) {
   let lastError;
@@ -356,6 +364,14 @@ function bindEvents() {
   });
   document.querySelectorAll('[data-feedback-quality]').forEach(button => {
     button.addEventListener('click', () => selectFeedbackQuality(Number(button.dataset.feedbackQuality)));
+  });
+  document.getElementById('feedback-photo').addEventListener('change', handleFeedbackPhoto);
+  document.getElementById('feedback-photo-remove').addEventListener('click', removeFeedbackPhoto);
+  document.getElementById('feedback-comment').addEventListener('input', event => {
+    feedbackDraft.comment = event.target.value;
+    feedbackDraft.submitted = false;
+    feedbackDraft.error = '';
+    document.getElementById('feedback-comment-count').textContent = String(feedbackDraft.comment.length);
   });
   document.getElementById('feedback-submit').addEventListener('click', submitObservationFeedback);
 
@@ -1353,29 +1369,146 @@ function feedbackAvailabilityFor(data) {
   return { open: true, reason: '' };
 }
 
+function loadFeedbackImage(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('无法读取这张图片，请换一张重试'));
+    };
+    image.src = objectUrl;
+  });
+}
+
+function canvasToBlob(canvas, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      blob => blob ? resolve(blob) : reject(new Error('图片压缩失败，请换一张重试')),
+      'image/jpeg',
+      quality,
+    );
+  });
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('图片读取失败，请重试'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function compressFeedbackPhoto(file) {
+  if (!FEEDBACK_PHOTO_TYPES.has(file.type)) throw new Error('仅支持 JPEG、PNG 或 WebP 图片');
+  if (file.size > FEEDBACK_MAX_SOURCE_BYTES) throw new Error('原图请控制在 12MB 以内');
+  const image = await loadFeedbackImage(file);
+  let maxEdge = 1600;
+  let blob = null;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const scale = Math.min(1, maxEdge / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext('2d', { alpha: false });
+    context.fillStyle = '#090c17';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    blob = await canvasToBlob(canvas, Math.max(0.58, 0.84 - attempt * 0.07));
+    if (blob.size <= FEEDBACK_MAX_PHOTO_BYTES) break;
+    maxEdge = Math.round(maxEdge * 0.78);
+  }
+  if (!blob || blob.size > FEEDBACK_MAX_PHOTO_BYTES) throw new Error('图片压缩后仍过大，请换一张较小的照片');
+  return {
+    dataUrl: await blobToDataUrl(blob),
+    size: blob.size,
+  };
+}
+
+async function handleFeedbackPhoto(event) {
+  const file = event.target.files?.[0];
+  if (!file || feedbackDraft.processingPhoto) return;
+  const targetKey = `${feedbackDraft.spot}:${feedbackDraft.date}`;
+  feedbackDraft.processingPhoto = true;
+  feedbackDraft.error = '';
+  renderFeedbackDraft();
+  try {
+    const photo = await compressFeedbackPhoto(file);
+    if (`${feedbackDraft.spot}:${feedbackDraft.date}` !== targetKey) return;
+    feedbackDraft.photoDataUrl = photo.dataUrl;
+    feedbackDraft.removePhoto = false;
+    feedbackDraft.submitted = false;
+  } catch (error) {
+    feedbackDraft.error = error.message;
+  } finally {
+    event.target.value = '';
+    feedbackDraft.processingPhoto = false;
+    renderFeedbackDraft();
+  }
+}
+
+function removeFeedbackPhoto() {
+  if (!feedbackDraft.open || feedbackDraft.submitting || feedbackDraft.processingPhoto) return;
+  feedbackDraft.photoDataUrl = null;
+  feedbackDraft.hasStoredPhoto = false;
+  feedbackDraft.removePhoto = true;
+  feedbackDraft.submitted = false;
+  feedbackDraft.error = '';
+  document.getElementById('feedback-photo').value = '';
+  renderFeedbackDraft();
+}
+
 function renderFeedbackDraft() {
   const quality = document.getElementById('feedback-quality');
   const submit = document.getElementById('feedback-submit');
   const status = document.getElementById('feedback-status');
+  const photoInput = document.getElementById('feedback-photo');
+  const photoPicker = document.querySelector('.feedback-photo-picker');
+  const photoPreview = document.getElementById('feedback-photo-preview');
+  const photoImage = document.getElementById('feedback-photo-image');
+  const photoStatus = document.getElementById('feedback-photo-status');
+  const photoRemove = document.getElementById('feedback-photo-remove');
+  const comment = document.getElementById('feedback-comment');
+  const disabled = !feedbackDraft.open || feedbackDraft.submitting || feedbackDraft.processingPhoto;
   document.querySelectorAll('[data-feedback-observed]').forEach(button => {
     const selected = (button.dataset.feedbackObserved === 'true') === feedbackDraft.observed;
     button.classList.toggle('is-selected', feedbackDraft.observed !== null && selected);
-    button.disabled = !feedbackDraft.open || feedbackDraft.submitting;
+    button.disabled = disabled;
     button.setAttribute('aria-pressed', selected ? 'true' : 'false');
   });
   document.querySelectorAll('[data-feedback-quality]').forEach(button => {
     const selected = Number(button.dataset.feedbackQuality) === feedbackDraft.actualQuality;
     button.classList.toggle('is-selected', selected);
-    button.disabled = !feedbackDraft.open || feedbackDraft.submitting;
+    button.disabled = disabled;
     button.setAttribute('aria-pressed', selected ? 'true' : 'false');
   });
   quality.hidden = feedbackDraft.observed !== true;
-  submit.disabled = !feedbackDraft.open || feedbackDraft.submitting || feedbackDraft.observed === null ||
+  photoInput.disabled = disabled;
+  photoPicker.classList.toggle('is-disabled', disabled);
+  photoPicker.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+  photoPreview.hidden = !feedbackDraft.photoDataUrl && !feedbackDraft.hasStoredPhoto;
+  photoImage.hidden = !feedbackDraft.photoDataUrl;
+  if (feedbackDraft.photoDataUrl) photoImage.src = feedbackDraft.photoDataUrl;
+  else photoImage.removeAttribute('src');
+  photoStatus.textContent = feedbackDraft.photoDataUrl
+    ? '照片已压缩并移除定位信息'
+    : '已上传实况照片 · 选择新照片可替换';
+  photoRemove.hidden = !feedbackDraft.photoDataUrl && !feedbackDraft.hasStoredPhoto;
+  photoRemove.disabled = disabled;
+  comment.disabled = disabled;
+  document.getElementById('feedback-comment-count').textContent = String(feedbackDraft.comment.length);
+  submit.disabled = disabled || feedbackDraft.observed === null ||
     (feedbackDraft.observed === true && !FEEDBACK_QUALITY_LABELS.has(feedbackDraft.actualQuality));
-  submit.textContent = feedbackDraft.submitting ? '正在记录…' : feedbackDraft.submitted ? '更新实况' : '提交实况';
+  submit.textContent = feedbackDraft.submitting ? '正在上传…' : feedbackDraft.submitted ? '更新实况' : '提交实况';
 
   if (!feedbackDraft.open) status.textContent = feedbackDraft.reason;
   else if (feedbackDraft.error) status.textContent = feedbackDraft.error;
+  else if (feedbackDraft.processingPhoto) status.textContent = '正在压缩照片并移除 EXIF…';
   else if (feedbackDraft.submitted) {
     const result = feedbackDraft.observed
       ? `看到了 · ${FEEDBACK_QUALITY_LABELS.get(feedbackDraft.actualQuality)}`
@@ -1388,6 +1521,7 @@ function renderFeedbackDraft() {
 function renderFeedbackPanel(data, spotId) {
   const availability = feedbackAvailabilityFor(data);
   const stored = getStoredFeedback(spotId, data.date);
+  const comment = typeof stored?.comment === 'string' ? stored.comment.slice(0, 300) : '';
   Object.assign(feedbackDraft, {
     spot: spotId,
     date: data.date,
@@ -1396,10 +1530,17 @@ function renderFeedbackPanel(data, spotId) {
     reason: availability.reason,
     observed: stored?.observed ?? null,
     actualQuality: stored?.actualQuality ?? null,
+    comment,
+    photoDataUrl: null,
+    hasStoredPhoto: Boolean(stored?.hasPhoto),
+    removePhoto: false,
+    processingPhoto: false,
     submitted: Boolean(stored),
     submitting: false,
     error: '',
   });
+  document.getElementById('feedback-photo').value = '';
+  document.getElementById('feedback-comment').value = comment;
   renderFeedbackDraft();
 }
 
@@ -1428,27 +1569,38 @@ async function submitObservationFeedback() {
   feedbackDraft.error = '';
   renderFeedbackDraft();
   try {
+    const payload = {
+      spot: feedbackDraft.spot,
+      date: feedbackDraft.date,
+      clientId: getFeedbackClientId(),
+      observed: feedbackDraft.observed,
+      actualQuality: feedbackDraft.observed ? feedbackDraft.actualQuality : 0,
+      comment: feedbackDraft.comment,
+    };
+    if (feedbackDraft.photoDataUrl) payload.photo = { dataUrl: feedbackDraft.photoDataUrl };
+    else if (feedbackDraft.removePhoto) payload.removePhoto = true;
     const response = await fetch(FEEDBACK_API_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        spot: feedbackDraft.spot,
-        date: feedbackDraft.date,
-        clientId: getFeedbackClientId(),
-        observed: feedbackDraft.observed,
-        actualQuality: feedbackDraft.observed ? feedbackDraft.actualQuality : 0,
-      }),
+      body: JSON.stringify(payload),
     });
-    const result = await response.json();
+    const result = await response.json().catch(() => ({
+      error: response.status === 413 ? '照片过大，请换一张较小的图片' : '实况提交失败',
+    }));
     if (!response.ok) throw new Error(result.error || '实况提交失败');
     const stored = {
       observed: feedbackDraft.observed,
       actualQuality: feedbackDraft.actualQuality,
+      comment: feedbackDraft.comment,
+      hasPhoto: result.photoSaved,
       recordedAt: result.recordedAt,
     };
     try {
       localStorage.setItem(feedbackStorageKey(feedbackDraft.spot, feedbackDraft.date), JSON.stringify(stored));
     } catch {}
+    feedbackDraft.photoDataUrl = null;
+    feedbackDraft.hasStoredPhoto = result.photoSaved;
+    feedbackDraft.removePhoto = false;
     feedbackDraft.submitted = true;
     trackUmamiEvent('feedback-submit', feedbackDraft.spot);
     showToast(result.message || '实况已记录');

@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@500;600&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260719-instant-weather-v30">
+  <link rel="stylesheet" href="css/styles.css?v=20260726-observation-media-v31">
   <script async src="https://unpkg.com/lucide@1.25.0/dist/umd/lucide.min.js"></script>
   <script
     defer
@@ -340,7 +340,7 @@
             <section class="detail-section observation-feedback" aria-labelledby="feedback-title">
               <span class="detail__eyebrow">Ground truth</span>
               <h3 class="detail-section__title" id="feedback-title">今晚是否看到？</h3>
-              <p class="observation-feedback__intro">告诉模型真实结果。你的反馈会与当天预测绑定，用于校准晚霞质量与观测成功率。</p>
+              <p class="observation-feedback__intro">告诉模型真实结果，也可以附上现场照片与评论。反馈会与当天预测绑定，用于校准晚霞质量与观测成功率。</p>
 
               <div class="observation-feedback__choices" aria-label="是否看到晚霞">
                 <button class="feedback-choice" type="button" data-feedback-observed="true">
@@ -364,9 +364,31 @@
                 </div>
               </div>
 
+              <div class="feedback-evidence">
+                <span class="feedback-evidence__label">现场记录 <small>选填</small></span>
+                <input class="feedback-photo-input" id="feedback-photo" type="file" accept="image/jpeg,image/png,image/webp">
+                <div class="feedback-photo-actions">
+                  <label class="feedback-photo-picker" for="feedback-photo">
+                    <i data-lucide="image-up" aria-hidden="true"></i>
+                    上传实况照片
+                  </label>
+                  <button class="feedback-photo-remove" id="feedback-photo-remove" type="button" hidden>移除照片</button>
+                </div>
+                <div class="feedback-photo-preview" id="feedback-photo-preview" hidden>
+                  <img id="feedback-photo-image" src="" alt="待提交的晚霞实况照片">
+                  <span id="feedback-photo-status">照片已压缩并移除定位信息</span>
+                </div>
+
+                <label class="feedback-comment-label" for="feedback-comment">
+                  <span>现场评论</span>
+                  <small><span id="feedback-comment-count">0</span>/300</small>
+                </label>
+                <textarea id="feedback-comment" maxlength="300" rows="3" placeholder="例如：18:52 西方出现粉紫色，持续约十分钟。"></textarea>
+              </div>
+
               <button class="feedback-submit" id="feedback-submit" type="button" disabled>提交实况</button>
               <p class="observation-feedback__status" id="feedback-status" role="status" aria-live="polite">选择真实结果后提交。</p>
-              <p class="observation-feedback__privacy">匿名记录，反馈数据不包含 IP 或个人信息。</p>
+              <p class="observation-feedback__privacy">反馈文件不保存 IP；照片会压缩并移除 EXIF。请勿在照片或评论中填写个人信息。</p>
             </section>
 
             <div class="detail-section" aria-label="本地商业合作">
@@ -490,6 +512,6 @@
     </div>
   </div>
 
-  <script src="js/app.js?v=20260719-instant-weather-v30"></script>
+  <script src="js/app.js?v=20260726-observation-media-v31"></script>
 </body>
 </html>
