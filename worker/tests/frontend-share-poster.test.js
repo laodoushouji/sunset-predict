@@ -38,3 +38,14 @@ test('支持系统文件分享并在不支持时降级保存长图', () => {
   assert.match(app, /getElementById\('share-poster-download'\)\.click\(\)/);
   assert.match(html, /电脑端请先保存长图/);
 });
+
+test('抽屉顶部按钮不会被拖拽区域捕获指针', () => {
+  const dragBody = app.match(/function bindDetailDrag\(\)[\s\S]*?\n}\n\n\/\/ ============================================\n\/\/ Toast/)?.[0] || '';
+  assert.match(dragBody, /event\.target\.closest\?\.\('\.detail__actions'\)/);
+  assert.match(dragBody, /currentDelta <= 4/);
+  assert.match(dragBody, /setPointerCapture/);
+  assert.ok(
+    dragBody.indexOf('setPointerCapture') > dragBody.indexOf("dragZone.addEventListener('pointermove'"),
+    '指针捕获只能在真实拖动后发生'
+  );
+});

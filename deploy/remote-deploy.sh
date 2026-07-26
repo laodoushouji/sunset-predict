@@ -180,7 +180,7 @@ grep -q "detail-overlay" /tmp/sunset-v2-public-index.html
 grep -q "物理层拆解" /tmp/sunset-v2-public-index.html
 grep -q "作者碎碎念" /tmp/sunset-v2-public-index.html
 grep -q "css/styles.css?v=20260726-spot-messages-v32" /tmp/sunset-v2-public-index.html
-grep -q "js/app.js?v=20260726-desktop-share-v33" /tmp/sunset-v2-public-index.html
+grep -q "js/app.js?v=20260726-detail-actions-v34" /tmp/sunset-v2-public-index.html
 grep -q '<script async src="https://unpkg.com/lucide@1.25.0/dist/umd/lucide.min.js"></script>' /tmp/sunset-v2-public-index.html
 grep -Eq 'id="forecast-bootstrap" type="application/json">\{"today":"[0-9]{4}-[0-9]{2}-[0-9]{2}"' /tmp/sunset-v2-public-index.html
 if grep -q 'cdn.tailwindcss.com' /tmp/sunset-v2-public-index.html; then
@@ -330,6 +330,7 @@ grep -q "async function createSharePoster" /tmp/sunset-v2-public-app.js
 grep -q "async function openSharePoster" /tmp/sunset-v2-public-app.js
 grep -q "async function sharePreparedPoster" /tmp/sunset-v2-public-app.js
 grep -q "navigator.maxTouchPoints > 0" /tmp/sunset-v2-public-app.js
+grep -q "event.target.closest?.('.detail__actions')" /tmp/sunset-v2-public-app.js
 grep -q "function readForecastBootstrap" /tmp/sunset-v2-public-app.js
 grep -q "function applyTimelinePayload" /tmp/sunset-v2-public-app.js
 grep -q "function submitSpotMessage" /tmp/sunset-v2-public-app.js

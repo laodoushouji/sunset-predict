@@ -1878,16 +1878,18 @@ function bindDetailDrag() {
   let touchStartY = null;
 
   dragZone.addEventListener('pointerdown', event => {
-    if (!event.isPrimary) return;
+    if (!event.isPrimary || event.target.closest?.('.detail__actions')) return;
     startY = event.clientY;
     currentDelta = 0;
-    dragZone.setPointerCapture?.(event.pointerId);
   });
 
   dragZone.addEventListener('pointermove', event => {
     if (startY === null || !event.isPrimary) return;
     currentDelta = Math.max(0, event.clientY - startY);
-    if (!currentDelta) return;
+    if (currentDelta <= 4) return;
+    if (!dragZone.hasPointerCapture?.(event.pointerId)) {
+      dragZone.setPointerCapture?.(event.pointerId);
+    }
     panel.style.transition = 'none';
     panel.style.transform = `translate(-50%, ${currentDelta}px)`;
     overlay.style.opacity = String(Math.max(0, 1 - currentDelta / 360));
