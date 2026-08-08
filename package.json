@@ -2,7 +2,20 @@
   "name": "sunset-predict",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/gen-sitemap.cjs",
+    "test": "node --test worker/tests/*.test.js",
+    "monitor:seo": "node scripts/seo-monitor.cjs",
+    "migrate:feedback": "node scripts/migrate-feedback-to-sqlite.cjs"
+  },
   "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "fast-geoip": "1.1.88",
+    "pngjs": "^7.0.0",
+    "sharp": "^0.33.5",
     "suncalc": "2.0.1"
   }
 }

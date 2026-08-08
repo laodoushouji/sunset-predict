@@ -26,6 +26,9 @@ let sharePosterPromise = null;
 let sharePosterKey = '';
 let sharePosterFile = null;
 let sharePosterUrl = '';
+let detailOpenedAt = 0;
+let detailEntrySource = 'direct';
+let detailExitTracked = false;
 const feedbackDraft = {
   spot: null,
   date: null,
@@ -88,13 +91,22 @@ window.addEventListener('load', refreshIcons, { once: true });
 
 const REGIONAL_SPOTS = [
   { slug: 'beijing', city: '北京 · Beijing', name: '景山 / 故宫', hook: '故宫全景烧霞预警' },
+  { slug: 'shenzhen', city: '深圳 · Shenzhen', name: '人才公园 / 深圳湾', hook: '后海蓝调预警' },
+  { slug: 'guangzhou', city: '广州 · Guangzhou', name: '广州塔 / 海心桥', hook: '珠江蓝调预报' },
+  { slug: 'hongkong', city: '香港 · Hong Kong', name: '维多利亚港', hook: '维港晚霞与亮灯预报' },
+  { slug: 'dunhuang', city: '敦煌 · Dunhuang', name: '鸣沙山 / 月牙泉', hook: '沙山落日与沙尘预报' },
   { slug: 'erhai', city: '大理 · Dali', name: '洱海', hook: '龙龛码头机位建议' },
   { slug: 'chongqing', city: '重庆 · Chongqing', name: '来福士 / 南山', hook: '千厮门亮灯同步' },
   { slug: 'xiamen', city: '厦门 · Xiamen', name: '黄厝沙滩', hook: '环岛路落日点位' },
   { slug: 'qingdao', city: '青岛 · Qingdao', name: '栈桥 / 五四广场', hook: '回澜阁绝美日落' },
   { slug: 'chengdu', city: '成都 · Chengdu', name: '金融城双塔', hook: '双塔反光点预报' },
-  { slug: 'shenzhen', city: '深圳 · Shenzhen', name: '人才公园 / 深圳湾', hook: '后海蓝调预警' },
   { slug: 'huangshan', city: '黄山 · Huangshan', name: '光明顶', hook: '云海 + 落日预测' },
+  { slug: 'wuhan', city: '武汉 · Wuhan', name: '黄鹤楼 / 长江大桥', hook: '黄鹤楼金顶落日' },
+  { slug: 'sanya', city: '三亚 · Sanya', name: '椰梦长廊', hook: '海上橘子海预报' },
+  { slug: 'xian', city: '西安 · Xi’an', name: '城墙 / 永宁门', hook: '古城墙金色余晖' },
+  { slug: 'nanjing', city: '南京 · Nanjing', name: '玄武湖', hook: '湖面落日与蓝调' },
+  { slug: 'xiapu', city: '霞浦 · Xiapu', name: '东壁村', hook: '滩涂光影预报' },
+  { slug: 'wuxi', city: '无锡 · Wuxi', name: '鼋头渚 / 太湖', hook: '太湖水面铺霞' },
 ];
 
 const DETAIL_SPOTS = {
@@ -108,17 +120,41 @@ const DETAIL_SPOTS = {
 };
 
 const UMAMI_EVENTS = new Set([
+  'spot-card-click',
+  'spot-card-exit',
+  'spot-card-fast-exit',
   'detail-open',
+  'detail-close',
+  'detail-page-exit',
   'date-change',
+  'timeline-node-open',
+  'message-more',
+  'feedback-photo-select',
   'feedback-submit',
+  'share-open',
+  'share-complete',
+  'share-save',
   'support-open',
   'partner-open',
 ]);
+const DETAIL_FAST_EXIT_MS = 10_000;
 
 function trackUmamiEvent(eventName, spot = 'all') {
   if (!UMAMI_EVENTS.has(eventName) || typeof window.umami?.track !== 'function') return;
   const safeSpot = spot === 'all' || Object.prototype.hasOwnProperty.call(DETAIL_SPOTS, spot) ? spot : 'all';
   window.umami.track(eventName, { spot: safeSpot });
+}
+
+function trackDetailPageExit(event) {
+  if (!detailOpen || !activeDetailSpot || detailExitTracked || event?.persisted) return;
+  detailExitTracked = true;
+  trackUmamiEvent('detail-page-exit', activeDetailSpot);
+  if (detailEntrySource === 'card') {
+    trackUmamiEvent('spot-card-exit', activeDetailSpot);
+    if (detailOpenedAt > 0 && Date.now() - detailOpenedAt < DETAIL_FAST_EXIT_MS) {
+      trackUmamiEvent('spot-card-fast-exit', activeDetailSpot);
+    }
+  }
 }
 
 const SCENIC_CAPTIONS = {
@@ -171,6 +207,51 @@ const SCENIC_CAPTIONS = {
     high: '云海流金 · 群峰浴霞 · 霞落云巅',
     observable: '峰顶落日 · 长空澄澈 · 群山剪影',
     blocked: '身在雾中 · 云幕封山 · 霞光无从抵达',
+  },
+  guangzhou: {
+    high: '珠江燃霞 · 广州塔鎏金 · 城市映红',
+    observable: '江上落日 · 城市蓝调 · 塔影澄明',
+    blocked: '西方云墙 · 金光难抵珠江',
+  },
+  wuhan: {
+    high: '江城燃霞 · 金顶映红 · 长江流金',
+    observable: '长江落日 · 古楼剪影 · 暮色澄明',
+    blocked: '西方云幕 · 黄鹤楼霞光隐没',
+  },
+  sanya: {
+    high: '海天燃霞 · 椰林映红 · 橘海铺金',
+    observable: '海上落日 · 椰影温柔 · 天际澄明',
+    blocked: '海云遮光 · 霞色沉入南海',
+  },
+  xian: {
+    high: '古城燃霞 · 城楼披金 · 长安暮色',
+    observable: '城墙落日 · 楼阙剪影 · 天际澄明',
+    blocked: '西山云幕 · 长安霞光隐没',
+  },
+  nanjing: {
+    high: '玄武铺霞 · 湖面流金 · 城市映红',
+    observable: '湖上落日 · 城墙剪影 · 暮色清澈',
+    blocked: '西方云墙 · 湖上霞光难现',
+  },
+  xiapu: {
+    high: '滩涂燃霞 · 渔排流金 · 海湾映红',
+    observable: '东壁落日 · 潮汐成纹 · 暮色温柔',
+    blocked: '山海云幕 · 霞光隐入海湾',
+  },
+  wuxi: {
+    high: '太湖铺霞 · 水面流金 · 远山映红',
+    observable: '湖上落日 · 长桥剪影 · 天水澄明',
+    blocked: '西方云墙 · 霞光止于湖外',
+  },
+  hongkong: {
+    high: '维港燃霞 · 楼宇鎏金 · 海面映红',
+    observable: '海港落日 · 天际澄明 · 蓝调亮灯',
+    blocked: '西方云墙 · 金光难抵维港',
+  },
+  dunhuang: {
+    high: '大漠燃霞 · 沙海鎏金 · 驼队剪影',
+    observable: '长空落日 · 沙山余晖 · 月泉暮色',
+    blocked: '沙尘蔽日 · 西方光路被风沙吞没',
   },
 };
 
@@ -237,7 +318,7 @@ function renderProbability(element, data, compact = false) {
 }
 
 const WEATHER_CLASSES = [
-  'clear', 'cloudy', 'overcast', 'fog', 'rain-light', 'rain-medium', 'rain-heavy',
+  'clear', 'cloudy', 'overcast', 'fog', 'dust', 'rain-light', 'rain-medium', 'rain-heavy',
   'snow-light', 'snow-medium', 'snow-heavy', 'thunder', 'unknown',
 ];
 
@@ -256,6 +337,22 @@ function renderWeatherBadge(element, data) {
     details.push(`降水概率 ${Math.round(Number(weather.precipitationProbability))}%`);
   }
   element.title = details.length ? `${element.textContent} · ${details.join(' · ')}` : element.textContent;
+}
+
+function renderBlueHourBrief(element, data) {
+  if (!element) return;
+  const blueHour = data?.blueHour;
+  if (!blueHour?.available || !blueHour.start || !blueHour.end) {
+    element.hidden = true;
+    element.removeAttribute('title');
+    return;
+  }
+  element.hidden = false;
+  const label = `蓝调 ${blueHour.start}–${blueHour.end}`;
+  const textElement = element.querySelector('span');
+  if (textElement) textElement.textContent = label;
+  else element.textContent = label;
+  element.title = `${label}${Number.isFinite(blueHour.score) ? ` · 质量 ${Math.round(blueHour.score)} 分` : ''}`;
 }
 
 function renderWeatherDetails(data) {
@@ -327,9 +424,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const bootstrap = readForecastBootstrap();
   if (bootstrap) {
     applyTimelinePayload(bootstrap);
-    requestAnimationFrame(openDetailFromHash);
+    requestAnimationFrame(openDetailFromUrl);
   }
-  fetchTimeline().finally(() => requestAnimationFrame(openDetailFromHash));
+  fetchTimeline().finally(() => requestAnimationFrame(openDetailFromUrl));
+  fetchAdvertisers();
 });
 
 // ============================================
@@ -337,11 +435,16 @@ document.addEventListener('DOMContentLoaded', () => {
 // ============================================
 function bindEvents() {
   const xihuCard = document.getElementById('card-xihu');
-  xihuCard.addEventListener('click', () => openDetail('xihu'));
+  xihuCard.addEventListener('click', event => {
+    event.preventDefault();
+    trackUmamiEvent('spot-card-click', 'xihu');
+    openDetail('xihu', { source: 'card' });
+  });
   xihuCard.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      openDetail('xihu');
+      trackUmamiEvent('spot-card-click', 'xihu');
+      openDetail('xihu', { source: 'card' });
     }
   });
 
@@ -356,11 +459,16 @@ function bindEvents() {
   });
 
   const bundCard = document.getElementById('card-bund');
-  bundCard.addEventListener('click', () => openDetail('waitan'));
+  bundCard.addEventListener('click', event => {
+    event.preventDefault();
+    trackUmamiEvent('spot-card-click', 'waitan');
+    openDetail('waitan', { source: 'card' });
+  });
   bundCard.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      openDetail('waitan');
+      trackUmamiEvent('spot-card-click', 'waitan');
+      openDetail('waitan', { source: 'card' });
     }
   });
 
@@ -374,7 +482,10 @@ function bindEvents() {
   });
   document.getElementById('feedback-submit').addEventListener('click', submitSpotMessage);
   document.getElementById('spot-messages-more').addEventListener('click', () => {
-    if (feedbackMessages.spot) loadSpotMessages(feedbackMessages.spot);
+    if (feedbackMessages.spot) {
+      trackUmamiEvent('message-more', feedbackMessages.spot);
+      loadSpotMessages(feedbackMessages.spot);
+    }
   });
 
   const supportOpen = document.getElementById('wechat-support-open');
@@ -426,6 +537,9 @@ function bindEvents() {
 
   shareCloseButtons.forEach(button => button.addEventListener('click', closeShareModal));
   document.getElementById('share-system-button').addEventListener('click', sharePreparedPoster);
+  document.getElementById('share-poster-download').addEventListener('click', () => {
+    trackUmamiEvent('share-save', activeDetailSpot);
+  });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !shareModal.hidden) closeShareModal();
     else if (event.key === 'Escape' && !partnerModal.hidden) closePartnerModal();
@@ -434,18 +548,22 @@ function bindEvents() {
   });
 
   document.querySelectorAll('.city-card').forEach(card => {
-    const openCityDetail = () => openDetail(card.dataset.spot);
-    card.addEventListener('click', openCityDetail);
+    // 卡片本身是 <a href="/spots/{slug}"> 真实链接。不拦截默认跳转，
+    // 让点击真实导航到城市落地页：既产生真实 pageview、给 Bing 内链权重，
+    // 落地页又会通过 openDetailFromUrl 自动按 URL 打开详情面板（弹层体验不丢）。
+    card.addEventListener('click', () => {
+      trackUmamiEvent('spot-card-click', card.dataset.spot);
+    });
     card.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        openCityDetail();
+        trackUmamiEvent('spot-card-click', card.dataset.spot);
       }
     });
   });
 
   document.getElementById('day-previous').addEventListener('click', () => changeDay(-1));
   document.getElementById('day-next').addEventListener('click', () => changeDay(1));
+  window.addEventListener('pagehide', trackDetailPageExit);
   bindSwipeNavigation();
 }
 
@@ -597,17 +715,16 @@ async function fetchTimeline() {
 function renderRegionalCards() {
   const grid = document.getElementById('regional-grid');
   grid.innerHTML = REGIONAL_SPOTS.map(spot => `
-    <article
+    <a
       class="city-card city-card--${spot.slug}"
       id="city-${spot.slug}"
       data-spot="${spot.slug}"
-      role="button"
-      tabindex="0"
+      href="/spots/${spot.slug}"
       aria-expanded="false"
       aria-controls="detail-panel"
       aria-label="${spot.name}晚霞预测，点击展开摄影指南"
     >
-      <img class="city-card__image" src="assets/city-${spot.slug}.webp?v=20260718-city-images-v3" alt="${spot.name}标志性晚霞摄影景观" loading="lazy" decoding="async">
+      <img class="city-card__image" src="assets/city-${spot.slug}.webp?v=20260726-city-images-v11" alt="${spot.name}标志性晚霞摄影景观" loading="lazy" decoding="async">
       <div class="city-card__content">
         <div class="city-card__top">
           <p class="city-card__city">${spot.city}</p>
@@ -621,6 +738,7 @@ function renderRegionalCards() {
             <span class="city-card__unit">/ 100</span>
           </div>
           <div class="city-card__grade">连接实时模型</div>
+          <div class="city-card__blue-hour" hidden><i data-lucide="moon-star" aria-hidden="true"></i><span>蓝调 --:--–--:--</span></div>
           <div class="city-card__progress"><span></span></div>
         </div>
         <div class="city-card__footer">
@@ -628,7 +746,7 @@ function renderRegionalCards() {
           <span class="city-card__status">试运行</span>
         </div>
       </div>
-    </article>
+    </a>
   `).join('');
 }
 
@@ -654,6 +772,7 @@ function renderRegionalSpot(data) {
     card.querySelector('.city-card__grade').textContent = '暂未连接';
     renderProbability(card.querySelector('.city-card__chance'), {}, true);
     renderWeatherBadge(card.querySelector('.city-card__weather'), {});
+    renderBlueHourBrief(card.querySelector('.city-card__blue-hour'), {});
     card.querySelector('.city-card__progress span').style.width = '0';
     regionalData.delete(data.spot);
     return;
@@ -669,6 +788,7 @@ function renderRegionalSpot(data) {
   gradeEl.textContent = getScenicCaption(data.spot, score, data.probability);
   renderProbability(card.querySelector('.city-card__chance'), data, true);
   renderWeatherBadge(card.querySelector('.city-card__weather'), data);
+  renderBlueHourBrief(card.querySelector('.city-card__blue-hour'), data);
   applyObservationState(card, score, data.probability);
   card.querySelector('.city-card__spot').lastChild.textContent = data.bestSpot?.name || data.photographyAdvice;
   requestAnimationFrame(() => { progress.style.width = `${score}%`; });
@@ -704,6 +824,7 @@ function renderWaitan(data) {
   gradeEl.textContent = getScenicCaption('waitan', score, data.probability);
   renderProbability(document.getElementById('waitan-probability'), data);
   renderWeatherBadge(document.getElementById('waitan-weather'), data);
+  renderBlueHourBrief(document.getElementById('waitan-blue-hour'), data);
   requestAnimationFrame(() => { progressEl.style.width = `${score}%`; });
   const card = document.getElementById('card-bund');
   card.classList.add('is-live');
@@ -812,15 +933,20 @@ function detailSpotFromHash() {
   return match && DETAIL_SPOTS[match[1]] ? match[1] : null;
 }
 
-function openDetailFromHash() {
-  const spotId = detailSpotFromHash();
+function detailSpotFromPath() {
+  const match = window.location.pathname.match(/^\/spots\/([a-z-]+)\/?$/);
+  return match && DETAIL_SPOTS[match[1]] ? match[1] : null;
+}
+
+function openDetailFromUrl() {
+  const spotId = detailSpotFromHash() || detailSpotFromPath();
   if (spotId) openDetail(spotId, { updateUrl: false, focus: false });
 }
 
 function partnerImageForSpot(spotId) {
   if (spotId === 'xihu') return 'assets/xihu-sunset.webp';
   if (spotId === 'waitan') return 'assets/waitan-sunset.webp';
-  return `assets/city-${spotId}.webp?v=20260718-city-images-v3`;
+  return `assets/city-${spotId}.webp?v=20260726-city-images-v11`;
 }
 
 function sharePosterCacheKey(data, spotId) {
@@ -1085,7 +1211,7 @@ async function createSharePoster(data, spotId) {
 
   ctx.fillStyle = 'rgba(255,255,255,0.82)';
   ctx.font = '700 28px Manrope, sans-serif';
-  ctx.fillText('sunsetpredict.cloud', 72, 1840);
+  ctx.fillText('sunsetpredict.cloud/spots/' + spotId, 72, 1840);
   ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(255,255,255,0.38)';
   ctx.font = '500 22px "Noto Sans SC", sans-serif';
@@ -1132,6 +1258,7 @@ async function openSharePoster() {
   const button = document.getElementById('detail-share');
   const label = button.querySelector('span');
   if (!data || !activeDetailSpot || button.disabled) return;
+  trackUmamiEvent('share-open', activeDetailSpot);
   button.disabled = true;
   label.textContent = '生成中';
   try {
@@ -1163,13 +1290,17 @@ async function openSharePoster() {
 
 async function sharePreparedPoster() {
   const button = document.getElementById('share-system-button');
+  const spotName = DETAIL_SPOTS[activeDetailSpot]?.name || '';
+  const shareUrl = `${location.origin}/?utm_source=share&utm_medium=webshare&utm_campaign=${activeDetailSpot}`;
+  const shareText = `今晚${spotName}晚霞摄影指南 · ${shareUrl}`;
   if (canSharePosterFile(sharePosterFile)) {
     try {
       await navigator.share({
         files: [sharePosterFile],
         title: button.dataset.shareTitle || '晚霞摄影指南',
-        text: '来自 sunsetpredict.cloud 的晚霞摄影指南',
+        text: shareText,
       });
+      trackUmamiEvent('share-complete', activeDetailSpot);
       showToast('已打开系统分享面板');
     } catch (error) {
       if (error.name !== 'AbortError') showToast('分享未完成，可先保存长图');
@@ -1177,7 +1308,26 @@ async function sharePreparedPoster() {
     return;
   }
   document.getElementById('share-poster-download').click();
+  trackUmamiEvent('share-complete', activeDetailSpot);
+  trackUmamiEvent('share-save', activeDetailSpot);
   showToast('长图已保存，可发送到微信、朋友圈或小红书');
+}
+
+// 从后端拉取商户合作位配置（动态，无需前端发版）。后端异常时回退到 window.advertiserData 兜底。
+async function fetchAdvertisers() {
+  try {
+    const res = await fetch('/api/advertisers', { cache: 'no-store' });
+    if (!res.ok) return;
+    const payload = await res.json();
+    if (payload && 'data' in payload) {
+      advertiserData = payload.data || null;
+      if (detailOpen && activeDetailSpot) {
+        renderPartnerCard(advertiserData, activeDetailSpot);
+      }
+    }
+  } catch {
+    // 网络/解析失败：保留 window.advertiserData 兜底值（null = 招募态）
+  }
 }
 
 function renderPartnerCard(data, spotId) {
@@ -1246,7 +1396,10 @@ function renderSunsetWindow(data) {
     details.textContent = `高云 ${value(metrics.cloudHigh)} · 低云 ${value(metrics.cloudLow)} · 西方光路 ${value(metrics.windowTransparency)} · 能见度 ${Number.isFinite(Number(metrics.visibilityKm)) ? `${Number(metrics.visibilityKm).toFixed(1)}km` : '--'}`;
   };
   track.querySelectorAll('.sunset-window__node').forEach(button => {
-    button.addEventListener('click', () => showNode(Number(button.dataset.windowIndex)));
+    button.addEventListener('click', () => {
+      trackUmamiEvent('timeline-node-open', activeDetailSpot);
+      showNode(Number(button.dataset.windowIndex));
+    });
   });
 
   const peakIndex = Math.max(0, nodes.findIndex(node => node.time === sunsetWindow.peakTime));
@@ -1284,14 +1437,14 @@ function scheduleBlueHourTheme(data) {
   blueHourThemeTimer = setInterval(update, 30_000);
 }
 
-function renderBlueHour(data, spotId) {
+function renderBlueHour(data) {
   if (blueHourTimer) {
     clearInterval(blueHourTimer);
     blueHourTimer = null;
   }
   const section = document.getElementById('blue-hour-section');
   const blueHour = data.blueHour;
-  if (!['xihu', 'waitan'].includes(spotId) || !blueHour?.available) {
+  if (!blueHour?.available) {
     section.hidden = true;
     return;
   }
@@ -1444,6 +1597,7 @@ async function handleFeedbackPhoto(event) {
     feedbackDraft.photoDataUrl = photo.dataUrl;
     feedbackDraft.removePhoto = false;
     feedbackDraft.submitted = false;
+    trackUmamiEvent('feedback-photo-select', feedbackDraft.spot);
   } catch (error) {
     feedbackDraft.error = error.message;
   } finally {
@@ -1688,7 +1842,7 @@ function renderDetailContent(data, spotId) {
 
   renderDetailMetrics(data, score, grade, spotId);
   renderSunsetWindow(data);
-  renderBlueHour(data, spotId);
+  renderBlueHour(data);
   renderWeatherDetails(data);
   renderFeedbackPanel(data, spotId);
   const bestSpot = spotId === 'xihu' ? getDynamicBestSpot(data.date) : null;
@@ -1700,7 +1854,7 @@ function renderDetailContent(data, spotId) {
   bestSpotElement.title = bestSpot?.azimuth ? `${dayLabel}日落方位角 ${bestSpot.azimuth}°` : '';
 
   const sunsetTime = data.sunTimes?.sunset || '--:--';
-  const hasBlueHour = ['xihu', 'waitan'].includes(spotId) && data.blueHour?.available;
+  const hasBlueHour = Boolean(data.blueHour?.available);
   const heroBlueHour = document.getElementById('hero-blue-hour');
   const timelineConnector = document.getElementById('light-timeline-connector');
   document.getElementById('sunset-time').textContent = sunsetTime;
@@ -1749,14 +1903,50 @@ function renderToday(data) {
   tag.textContent = getScenicCaption('xihu', score, data.probability);
   renderProbability(document.getElementById('xihu-probability'), data);
   renderWeatherBadge(document.getElementById('xihu-day-status'), data);
+  renderBlueHourBrief(document.getElementById('xihu-blue-hour'), data);
   applyObservationState(document.getElementById('card-xihu'), score, data.probability);
   scheduleBlueHourTheme(data);
+  startSunsetHook(data);
 
   document.getElementById('card-xihu').setAttribute(
     'aria-label',
     `西湖${relativeDayLabel(timelineOffsetForDate(data.date) ?? 0)}${data.weather?.label || ''}，晚霞指数${score}分，观测成功率${data.probability ?? 0}%，点击展开摄影指南`
   );
 
+}
+
+// ============================================
+// Sunset countdown hook (黄金 4 小时场景)
+// ============================================
+let sunsetHookTimer = null;
+function startSunsetHook(data) {
+  const el = document.getElementById('sunset-hook');
+  const textEl = document.getElementById('sunset-hook-text');
+  if (!el || !textEl) return;
+  const sunset = data?.sunTimes?.sunset;
+  if (!sunset) { el.hidden = true; if (sunsetHookTimer) { clearInterval(sunsetHookTimer); sunsetHookTimer = null; } return; }
+  if (sunsetHookTimer) clearInterval(sunsetHookTimer);
+  const target = Date.parse(`${data.date}T${sunset}:00+08:00`);
+  if (Number.isNaN(target)) { el.hidden = true; return; }
+  function update() {
+    const now = Date.now();
+    const diff = target - now;
+    if (diff <= 0) { el.hidden = true; clearInterval(sunsetHookTimer); sunsetHookTimer = null; return; }
+    el.hidden = false;
+    const hrs = Math.floor(diff / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    let label;
+    if (hrs >= 4) {
+      label = `距今日日落 ${hrs} 小时 · 今晚值得拍吗？`;
+    } else if (hrs >= 1) {
+      label = `距日落 ${hrs} 时 ${mins} 分 · 决策黄金期`;
+    } else {
+      label = `距日落 ${mins} 分钟 · 现在出门！`;
+    }
+    textEl.textContent = label;
+  }
+  update();
+  sunsetHookTimer = setInterval(update, 60000);
 }
 
 // ============================================
@@ -1799,7 +1989,9 @@ function animateNumber(el, target) {
 // Bottom sheet
 // ============================================
 function updateDetailUrl(open, spotId = activeDetailSpot) {
-  const target = `${window.location.pathname}${window.location.search}${open && spotId ? `#!${spotId}` : ''}`;
+  const onSpotLanding = /^\/spots\/[a-z-]+\/?$/.test(window.location.pathname);
+  const pathname = !open && onSpotLanding ? '/' : window.location.pathname;
+  const target = `${pathname}${window.location.search}${open && spotId && !onSpotLanding ? `#!${spotId}` : ''}`;
   window.history.replaceState(window.history.state, '', target);
 }
 
@@ -1811,7 +2003,7 @@ function resetDetailDragStyles() {
   overlay.style.removeProperty('opacity');
 }
 
-function openDetail(spotId = 'xihu', { updateUrl = true, focus = true } = {}) {
+function openDetail(spotId = 'xihu', { updateUrl = true, focus = true, source = 'direct' } = {}) {
   const data = detailDataForSpot(spotId);
   const meta = DETAIL_SPOTS[spotId];
   if (!meta || !data) {
@@ -1828,6 +2020,9 @@ function openDetail(spotId = 'xihu', { updateUrl = true, focus = true } = {}) {
   }
   activeDetailSpot = spotId;
   detailOpen = true;
+  detailOpenedAt = Date.now();
+  detailEntrySource = source;
+  detailExitTracked = false;
   trackUmamiEvent('detail-open', spotId);
   resetDetailDragStyles();
   renderDetailContent(data, spotId);
@@ -1852,6 +2047,7 @@ function closeDetail({ updateUrl = true, focus = true } = {}) {
   const hint = document.getElementById('expand-hint');
   const closingSpot = activeDetailSpot;
   const card = closingSpot ? document.getElementById(DETAIL_SPOTS[closingSpot].cardId) : null;
+  trackUmamiEvent('detail-close', closingSpot);
   detailOpen = false;
   resetDetailDragStyles();
 
@@ -1865,6 +2061,9 @@ function closeDetail({ updateUrl = true, focus = true } = {}) {
   document.body.classList.remove('detail-open');
   if (updateUrl) updateDetailUrl(false);
   activeDetailSpot = null;
+  detailOpenedAt = 0;
+  detailEntrySource = 'direct';
+  detailExitTracked = false;
   if (focus) card?.focus({ preventScroll: true });
 }
 

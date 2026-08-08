@@ -1,10 +1,21 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const sharp = require('sharp');
+
+const {
+  getFeedbackRow,
+  saveFeedbackRow,
+  listFeedbackMessages,
+  listTopPhotos,
+  getFeedbackStats,
+} = require('./feedback-db');
 
 const FEEDBACK_SPOTS = new Set([
   'xihu', 'waitan', 'beijing', 'erhai', 'chongqing',
   'xiamen', 'qingdao', 'chengdu', 'shenzhen', 'huangshan',
+  'guangzhou', 'wuhan', 'sanya', 'xian', 'nanjing', 'xiapu', 'wuxi',
+  'hongkong',
 ]);
 const MAX_COMMENT_LENGTH = 300;
 const MAX_PHOTO_BYTES = 1_200_000;
@@ -80,6 +91,27 @@ function normalizePhoto(input) {
   };
 }
 
+// 统一压缩为 WebP 并剥离 EXIF（重编码会丢弃原图 GPS/机型等敏感元数据）。
+// 失败（如非法图片字节）时降级为原图，保证提交不因此中断。
+const OPTIMIZED_PHOTO_WIDTH = 1600;
+const OPTIMIZED_PHOTO_QUALITY = 80;
+
+async function optimizePhoto(photo) {
+  try {
+    const output = await sharp(photo.bytes, { failOn: 'none', limitInputPixels: false })
+      .rotate()
+      .resize({ withoutEnlargement: true, fit: 'inside', width: OPTIMIZED_PHOTO_WIDTH })
+      .webp({ quality: OPTIMIZED_PHOTO_QUALITY, effort: 4 })
+      .toBuffer();
+    if (output && output.length) {
+      return { mimeType: 'image/webp', extension: 'webp', bytes: output };
+    }
+  } catch {
+    // 降级为原图
+  }
+  return { mimeType: photo.mimeType, extension: photo.extension, bytes: photo.bytes };
+}
+
 function normalizeFeedbackPayload(input = {}) {
   const spot = String(input.spot || '');
   const date = String(input.date || '');
@@ -138,32 +170,31 @@ async function saveFeedback(root, payload, prediction, recordedAt = new Date()) 
     .update(`${respondentHash}:${normalized.spot}:${normalized.date}`)
     .digest('hex');
   const directory = path.join(root, normalized.date);
-  const file = path.join(directory, `${responseKey}.json`);
-  const temporary = `${file}.${process.pid}-${Date.now()}.tmp`;
   await fs.mkdir(directory, { recursive: true, mode: 0o750 });
 
-  let updated = false;
-  let previousRecord = null;
-  try {
-    previousRecord = JSON.parse(await fs.readFile(file, 'utf8'));
-    updated = true;
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
+  const previous = getFeedbackRow(root, responseKey);
+  const updated = Boolean(previous);
 
-  let photo = previousRecord?.photo || null;
+  let photo = previous?.photo_file
+    ? {
+        file: previous.photo_file,
+        mimeType: previous.photo_mime,
+        size: previous.photo_size,
+        sha256: previous.photo_sha256,
+      }
+    : null;
+
   if (normalized.photoAction === 'replace') {
+    const optimized = await optimizePhoto(normalized.photo);
     const imageDirectory = path.join(directory, 'images');
-    const imageFile = path.join(imageDirectory, `${responseKey}.${normalized.photo.extension}`);
-    const imageTemporary = `${imageFile}.${process.pid}-${Date.now()}.tmp`;
+    const imageFile = path.join(imageDirectory, `${responseKey}.${optimized.extension}`);
     await fs.mkdir(imageDirectory, { recursive: true, mode: 0o750 });
-    await fs.writeFile(imageTemporary, normalized.photo.bytes, { mode: 0o640 });
-    await fs.rename(imageTemporary, imageFile);
+    await fs.writeFile(imageFile, optimized.bytes, { mode: 0o640 });
     photo = {
       file: path.relative(root, imageFile),
-      mimeType: normalized.photo.mimeType,
-      size: normalized.photo.bytes.length,
-      sha256: crypto.createHash('sha256').update(normalized.photo.bytes).digest('hex'),
+      mimeType: optimized.mimeType,
+      size: optimized.bytes.length,
+      sha256: crypto.createHash('sha256').update(optimized.bytes).digest('hex'),
     };
   } else if (normalized.photoAction === 'remove') {
     photo = null;
@@ -172,15 +203,13 @@ async function saveFeedback(root, payload, prediction, recordedAt = new Date()) 
     throw new FeedbackError('请上传照片或填写评论');
   }
 
-  const legacyGroundTruth = previousRecord?.legacyGroundTruth || (
-    typeof previousRecord?.observed === 'boolean'
-      ? {
-          observed: previousRecord.observed,
-          actualQuality: previousRecord.actualQuality,
-          actualQualityLabel: previousRecord.actualQualityLabel,
-        }
-      : null
-  );
+  const legacyGroundTruth = previous?.observed != null
+    ? {
+        observed: Boolean(previous.observed),
+        actualQuality: previous.actual_quality,
+        actualQualityLabel: previous.actual_quality_label,
+      }
+    : null;
 
   const record = {
     schemaVersion: 3,
@@ -195,10 +224,32 @@ async function saveFeedback(root, payload, prediction, recordedAt = new Date()) 
     prediction: predictionSnapshot(prediction),
     recordedAt: recordedAt.toISOString(),
   };
-  await fs.writeFile(temporary, JSON.stringify(record), { mode: 0o640 });
-  await fs.rename(temporary, file);
 
-  const previousPhoto = previousRecord?.photo?.file;
+  saveFeedbackRow(root, {
+    response_key: responseKey,
+    respondent_hash: respondentHash,
+    spot: normalized.spot,
+    date: normalized.date,
+    comment: normalized.comment,
+    photo_file: photo?.file ?? null,
+    photo_mime: photo?.mimeType ?? null,
+    photo_size: photo?.size ?? null,
+    photo_sha256: photo?.sha256 ?? null,
+    observed: previous?.observed ?? null,
+    actual_quality: previous?.actual_quality ?? null,
+    actual_quality_label: previous?.actual_quality_label ?? null,
+    raw_quality: prediction ? (Number.isFinite(prediction.rawQuality) ? prediction.rawQuality : prediction.quality) : null,
+    quality: prediction ? prediction.quality : null,
+    probability: prediction ? prediction.probability : null,
+    grade: prediction ? prediction.grade : null,
+    model_version: prediction ? (prediction.modelVersion || null) : null,
+    source: prediction ? (prediction.source || null) : null,
+    prediction_json: JSON.stringify(predictionSnapshot(prediction)),
+    recorded_at: record.recordedAt,
+    schema_version: 3,
+  });
+
+  const previousPhoto = previous?.photo_file;
   if (previousPhoto && previousPhoto !== photo?.file) {
     const candidate = path.resolve(root, previousPhoto);
     if (candidate.startsWith(`${path.resolve(root)}${path.sep}`)) {
@@ -215,41 +266,29 @@ function publicPhotoUrl(photo) {
 
 async function loadFeedbackMessages(root, spot) {
   if (!FEEDBACK_SPOTS.has(spot)) throw new FeedbackError('站点无效');
-  let dateEntries;
-  try {
-    dateEntries = await fs.readdir(root, { withFileTypes: true });
-  } catch (error) {
-    if (error.code === 'ENOENT') return [];
-    throw error;
-  }
-  const dates = dateEntries
-    .filter(entry => entry.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(entry.name))
-    .map(entry => entry.name);
-  const records = (await Promise.all(dates.map(async date => {
-    const directory = path.join(root, date);
-    const names = await fs.readdir(directory);
-    return Promise.all(names
-      .filter(name => /^[a-f0-9]{64}\.json$/.test(name))
-      .map(async name => {
-        try {
-          return JSON.parse(await fs.readFile(path.join(directory, name), 'utf8'));
-        } catch {
-          return null;
-        }
-      }));
-  }))).flat();
+  const rows = listFeedbackMessages(root, spot);
+  return rows.map(row => ({
+    id: row.response_key,
+    spot: row.spot,
+    date: row.date,
+    comment: String(row.comment || '').slice(0, MAX_COMMENT_LENGTH),
+    photoUrl: publicPhotoUrl({ file: row.photo_file }),
+    recordedAt: row.recorded_at,
+  }));
+}
 
-  return records
-    .filter(record => record?.spot === spot && (record.comment || publicPhotoUrl(record.photo)))
-    .map(record => ({
-      id: record.responseKey,
-      spot: record.spot,
-      date: record.date,
-      comment: String(record.comment || '').slice(0, MAX_COMMENT_LENGTH),
-      photoUrl: publicPhotoUrl(record.photo),
-      recordedAt: record.recordedAt,
+// SEO 落地页照片墙：历史高分实拍（优先用户实拍评分，回退模型质量分）。
+// 同步查询（better-sqlite3），SSR 直接调用；异常由调用方兜底为空数组。
+function loadTopPhotos(root, spot, limit = 9) {
+  if (!FEEDBACK_SPOTS.has(spot)) return [];
+  return listTopPhotos(root, spot, limit)
+    .map(row => ({
+      photoUrl: publicPhotoUrl({ file: row.photo_file }),
+      comment: String(row.comment || '').slice(0, MAX_COMMENT_LENGTH),
+      date: row.date,
+      score: Number.isFinite(row.score) ? Math.round(row.score) : null,
     }))
-    .sort((a, b) => String(b.recordedAt).localeCompare(String(a.recordedAt)) || b.id.localeCompare(a.id));
+    .filter(item => item.photoUrl);
 }
 
 function paginateFeedbackMessages(messages, cursor, requestedLimit) {
@@ -288,10 +327,13 @@ module.exports = {
   FeedbackError,
   feedbackAvailability,
   findPredictionInTimeline,
+  getFeedbackStats,
   loadFeedbackMessages,
   loadFeedbackPhoto,
+  loadTopPhotos,
   normalizeFeedbackPayload,
   normalizePhoto,
+  optimizePhoto,
   paginateFeedbackMessages,
   predictionSnapshot,
   saveFeedback,

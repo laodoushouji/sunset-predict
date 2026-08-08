@@ -16,6 +16,7 @@ const {
   sampleRemote,
   sampleWeather,
 } = require('./sunset-window');
+const { buildBlueHour, getBlueHourTimes } = require('./blue-hour');
 const { fetchQWeatherHourly, mergeQWeather, qweatherConfig } = require('./qweather');
 
 const CITY_SPOTS = {
@@ -98,6 +99,96 @@ const CITY_SPOTS = {
     bestSpot: { name: '光明顶', desc: '云海、群峰剪影与落日同框' },
     hook: '云海 + 落日双重预测',
     traits: ['mountain'],
+  },
+  guangzhou: {
+    spot: 'guangzhou',
+    spotName: '广州塔 / 海心桥',
+    location: '广东 · 广州',
+    target: { lat: 23.109, lon: 113.319 },
+    window: { name: '肇庆窗口', distanceKm: 100 },
+    bestSpot: { name: '海心桥', desc: '广州塔、珠江与城市晚霞同框' },
+    hook: '广州塔金光与珠江蓝调预报',
+    traits: ['water', 'city', 'glass'],
+  },
+  wuhan: {
+    spot: 'wuhan',
+    spotName: '武汉黄鹤楼 / 长江大桥',
+    location: '湖北 · 武汉',
+    target: { lat: 30.544, lon: 114.302 },
+    window: { name: '仙桃窗口', distanceKm: 100 },
+    bestSpot: { name: '黄鹤楼西爽亭', desc: '黄鹤楼、长江大桥与城市天际线同框' },
+    hook: '黄鹤楼金顶与长江落日预报',
+    traits: ['water', 'city'],
+  },
+  sanya: {
+    spot: 'sanya',
+    spotName: '三亚椰梦长廊',
+    location: '海南 · 三亚',
+    target: { lat: 18.267, lon: 109.489 },
+    window: { name: '南海窗口', distanceKm: 100 },
+    bestSpot: { name: '椰梦长廊', desc: '椰林剪影、海面落日与晚霞同框' },
+    hook: '椰梦长廊橘子海预报',
+    traits: ['water'],
+  },
+  xian: {
+    spot: 'xian',
+    spotName: '西安城墙 / 永宁门',
+    location: '陕西 · 西安',
+    target: { lat: 34.253, lon: 108.946 },
+    window: { name: '周至窗口', distanceKm: 80 },
+    bestSpot: { name: '永宁门城墙', desc: '城楼、古城墙与落日余晖同框' },
+    hook: '古城墙金色余晖预报',
+    traits: ['city'],
+  },
+  nanjing: {
+    spot: 'nanjing',
+    spotName: '南京玄武湖',
+    location: '江苏 · 南京',
+    target: { lat: 32.067, lon: 118.806 },
+    window: { name: '滁州窗口', distanceKm: 100 },
+    bestSpot: { name: '玄武湖环洲', desc: '湖面、城墙与紫金山暮色同框' },
+    hook: '玄武湖落日与城市蓝调预报',
+    traits: ['water', 'city'],
+  },
+  xiapu: {
+    spot: 'xiapu',
+    spotName: '霞浦东壁村',
+    location: '福建 · 宁德',
+    target: { lat: 26.789, lon: 119.678 },
+    window: { name: '内陆山地窗口', distanceKm: 60 },
+    bestSpot: { name: '东壁村观景台', desc: '滩涂纹理、渔排与海湾落日同框' },
+    hook: '滩涂光影与海湾晚霞预报',
+    traits: ['water', 'mountain'],
+  },
+  wuxi: {
+    spot: 'wuxi',
+    spotName: '无锡鼋头渚 / 太湖',
+    location: '江苏 · 无锡',
+    target: { lat: 31.523, lon: 120.218 },
+    window: { name: '宜兴窗口', distanceKm: 100 },
+    bestSpot: { name: '鼋头渚长春桥', desc: '太湖水面、远山与落日余晖同框' },
+    hook: '太湖落日与水面铺霞预报',
+    traits: ['water'],
+  },
+  hongkong: {
+    spot: 'hongkong',
+    spotName: '香港维多利亚港',
+    location: '香港 · 维多利亚港',
+    target: { lat: 22.294, lon: 114.169 },
+    window: { name: '大屿山 / 珠江口窗口', distanceKm: 100 },
+    bestSpot: { name: '西九文化区海滨', desc: '维港天际线、海面反光与城市蓝调同框' },
+    hook: '维港晚霞与城市亮灯预报',
+    traits: ['water', 'city', 'glass'],
+  },
+  dunhuang: {
+    spot: 'dunhuang',
+    spotName: '敦煌鸣沙山月牙泉',
+    location: '甘肃 · 敦煌',
+    target: { lat: 40.08744, lon: 94.66944 },
+    window: { name: '阿克塞 / 西戈壁窗口', distanceKm: 100 },
+    bestSpot: { name: '鸣沙山山脊', desc: '俯拍月牙泉、沙丘纹理与驼队剪影' },
+    hook: '沙山落日 · 沙尘与剪影参数',
+    traits: ['desert'],
   },
 };
 
@@ -226,9 +317,50 @@ function windowStatus(weather) {
   return 'MIXED';
 }
 
+// 卫星实况保守修正: 仅当葵花真彩观测与数值预报的远程低云分歧超过阈值时,
+// 按 预报60% / 卫星40% 加权融合 (预报为主, 卫星纠偏), 其余情况只记录不修正。
+const SATELLITE_DISAGREE_THRESHOLD = 15; // 分歧阈值 (百分点)
+const SATELLITE_BLEND_WEIGHT = 0.4;      // 卫星观测权重
+
+function applySatelliteWindow(westernWeather, satWindow) {
+  if (!satWindow || !satWindow.usable || !Number.isFinite(satWindow.cloudCover)
+    || !Number.isFinite(westernWeather?.cloudLow)) {
+    return { westernWeather, satellite: null };
+  }
+  const forecast = westernWeather.cloudLow;
+  const observed = satWindow.cloudCover;
+  const satellite = {
+    source: 'himawari-truecolor',
+    cloudCover: observed,
+    forecastCloudLow: forecast,
+    azimuthDeg: satWindow.azimuthDeg ?? null,
+    observedAt: satWindow.observedAt instanceof Date
+      ? satWindow.observedAt.toISOString()
+      : satWindow.observedAt ?? null,
+    minutesBeforeSunset: satWindow.minutesBeforeSunset ?? null,
+    applied: false,
+  };
+  if (Math.abs(observed - forecast) <= SATELLITE_DISAGREE_THRESHOLD) {
+    return { westernWeather, satellite };
+  }
+  const blended = Math.round(forecast * (1 - SATELLITE_BLEND_WEIGHT) + observed * SATELLITE_BLEND_WEIGHT);
+  satellite.applied = true;
+  satellite.blendedCloudLow = blended;
+  return { westernWeather: { ...westernWeather, cloudLow: blended }, satellite };
+}
+
 function predictRegionalSpot(config, weather, westernWeather, context = {}) {
-  const model = calculateSunsetScore(config.spot, weather, westernWeather, context);
-  const status = windowStatus(westernWeather);
+  const satResult = applySatelliteWindow(westernWeather, context.satelliteWindow);
+  const effectiveWestern = satResult.westernWeather;
+  const model = calculateSunsetScore(config.spot, weather, effectiveWestern, context);
+  const status = windowStatus(effectiveWestern);
+  const corrections = satResult.satellite?.applied
+    ? [...model.corrections, {
+      item: '卫星实况修正',
+      value: `远程低云 ${satResult.satellite.forecastCloudLow}%→${satResult.satellite.blendedCloudLow}%`,
+      desc: `葵花卫星真彩观测西方窗口云量${satResult.satellite.cloudCover}%，与预报分歧大，按预报60%/卫星40%加权`,
+    }]
+    : model.corrections;
 
   return {
     spot: config.spot,
@@ -245,14 +377,15 @@ function predictRegionalSpot(config, weather, westernWeather, context = {}) {
     label: getQualityLabel(model.score),
     color: model.colorOverride || predictColor(weather.visibility, weather.humidity),
     weather: model.weather,
-    confidence: westernWeather ? 'medium' : 'low',
+    confidence: satResult.satellite?.applied ? 'high' : (westernWeather ? 'medium' : 'low'),
+    satellite: satResult.satellite,
     metrics: {
       cloudLow: weather.cloudLow,
       cloudMid: weather.cloudMid,
       cloudHigh: weather.cloudHigh,
       visibilityKm: weather.visibility,
-      windowTransparency: Number.isFinite(westernWeather?.cloudLow)
-        ? Math.max(0, 100 - westernWeather.cloudLow)
+      windowTransparency: Number.isFinite(effectiveWestern?.cloudLow)
+        ? Math.max(0, 100 - effectiveWestern.cloudLow)
         : null,
       humidity250: weather.humidity250,
       precipitationMm: weather.precipitation,
@@ -266,7 +399,7 @@ function predictRegionalSpot(config, weather, westernWeather, context = {}) {
     ],
     bestSpot: config.bestSpot,
     photographyAdvice: config.hook,
-    corrections: model.corrections,
+    corrections,
     components: model.components,
     modelInputs: model.inputs,
     dataAvailability: model.dataAvailability,
@@ -275,6 +408,16 @@ function predictRegionalSpot(config, weather, westernWeather, context = {}) {
     modelVersion: model.modelVersion,
     source: `${config.spot}-model-v3`,
   };
+}
+
+// 从 SatelliteNowcast 实例安全获取站点西方窗口实况 (失败或未配置一律返回 null, 不影响主链路)
+function satelliteWindowFor(satellite, config) {
+  if (!satellite || typeof satellite.getWindowForSite !== 'function') return null;
+  try {
+    return satellite.getWindowForSite(config.target.lat, config.target.lon);
+  } catch {
+    return null;
+  }
 }
 
 async function getCityPrediction(slug, options = {}) {
@@ -306,21 +449,36 @@ async function getCityPrediction(slug, options = {}) {
     ...options,
     qweatherConfigured,
     qweatherPayload: qweatherResult.value,
+    satelliteConfigured: Boolean(options.satellite),
+    satelliteWindow: satelliteWindowFor(options.satellite, config),
   });
 }
 
 function buildCityPrediction(config, targetPayload, windowPayload, windowPoint, options = {}) {
   const dates = targetPayload?.daily?.time?.slice(0, 3) || getForecastDates(targetPayload);
-  const predictions = dates.map(date => {
+  const predictions = dates.map((date, dateIndex) => {
     const hour = targetHour(targetPayload, date);
     const sunTimes = getSunTimes(targetPayload, date);
     const localTime = `${date}T${sunTimes?.sunset || `${String(hour).padStart(2, '0')}:00`}`;
     const weather = mergeQWeather(parseTarget(targetPayload, date, hour), options.qweatherPayload, localTime);
     const westernWeather = parseWindow(windowPayload, date, hour);
     if (!weather) return null;
+    const blueHourTimes = getBlueHourTimes(date, config.target.lat, config.target.lon);
+    const blueHourWeather = blueHourTimes
+      ? sampleWeather(targetPayload, `${date}T${blueHourTimes.midpoint}`, 'interpolated-from-hourly') || weather
+      : null;
     return {
       date,
       sunTimes,
+      blueHour: blueHourWeather
+        ? buildBlueHour({
+          date,
+          latitude: config.target.lat,
+          longitude: config.target.lon,
+          weather: blueHourWeather,
+          spotId: config.spot,
+        })
+        : { available: false, message: '蓝调气象数据不足' },
       sunsetWindow: sunTimes
         ? buildSunsetWindow({
           date,
@@ -362,6 +520,8 @@ function buildCityPrediction(config, targetPayload, windowPayload, windowPoint, 
       ...predictRegionalSpot(config, weather, westernWeather, {
         windowPoint,
         typhoonNearby: options.typhoonNearby ?? null,
+        // 卫星实况仅用于今天的主预测 (观测时效只覆盖当日日落前窗口)
+        satelliteWindow: dateIndex === 0 ? options.satelliteWindow ?? null : null,
       }),
     };
   }).filter(Boolean);
@@ -373,8 +533,8 @@ function buildCityPrediction(config, targetPayload, windowPayload, windowPoint, 
     target: config.target,
     window: windowPoint,
     days: predictions,
-    forecast: predictions.map(({ date, rawQuality, quality, probability, probabilityLabel, label, color, verdict, weather }) => ({
-      date, rawQuality, quality, probability, probabilityLabel, label, color, verdict, weather,
+    forecast: predictions.map(({ date, rawQuality, quality, probability, probabilityLabel, label, color, verdict, weather, blueHour }) => ({
+      date, rawQuality, quality, probability, probabilityLabel, label, color, verdict, weather, blueHour,
     })),
     sourceStatus: {
       openMeteo: 'connected',
@@ -382,6 +542,9 @@ function buildCityPrediction(config, targetPayload, windowPayload, windowPoint, 
       qweather: !options.qweatherConfigured
         ? 'not-configured'
         : options.qweatherPayload ? 'connected' : 'unavailable',
+      satellite: !options.satelliteConfigured
+        ? 'not-configured'
+        : options.satelliteWindow?.usable ? 'connected' : 'unavailable',
       precipitation: predictions.some(prediction => Number.isFinite(prediction.metrics.precipitationRateMmH))
         ? 'connected'
         : 'unavailable',
@@ -435,6 +598,24 @@ function staleRegionalCache(payload, error) {
   };
 }
 
+async function allSettledWithConcurrency(items, limit, task) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      try {
+        results[index] = { status: 'fulfilled', value: await task(items[index], index) };
+      } catch (reason) {
+        results[index] = { status: 'rejected', reason };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 async function getAllCityPredictions(options = {}) {
   const entries = Object.keys(CITY_SPOTS);
   const configs = entries.map(slug => CITY_SPOTS[slug]);
@@ -455,7 +636,11 @@ async function getAllCityPredictions(options = {}) {
     const [targetBatch, windowBatch, qweatherResults] = await Promise.all([
       fetchJson(forecastUrl(configs.map(config => config.target), targetFields, true, true), fetchImpl, options.timeoutMs, options.retryOptions),
       fetchJson(forecastUrl(windowPoints, windowFields), fetchImpl, options.timeoutMs, options.retryOptions),
-      Promise.allSettled(configs.map(config => fetchQWeatherHourly(config.target, { ...options, fetchImpl }))),
+      allSettledWithConcurrency(
+        configs,
+        5,
+        config => fetchQWeatherHourly(config.target, { ...options, fetchImpl })
+      ),
     ]);
     const targetPayloads = normalizeBatchPayload(targetBatch, entries.length);
     const windowPayloads = normalizeBatchPayload(windowBatch, entries.length);
@@ -471,6 +656,8 @@ async function getAllCityPredictions(options = {}) {
             ...options,
             qweatherConfigured,
             qweatherPayload: qweatherResult?.status === 'fulfilled' ? qweatherResult.value : null,
+            satelliteConfigured: Boolean(options.satellite),
+            satelliteWindow: satelliteWindowFor(options.satellite, config),
           }
         );
       }),
@@ -489,6 +676,7 @@ async function getAllCityPredictions(options = {}) {
 module.exports = {
   CITY_ALIASES,
   CITY_SPOTS,
+  applySatelliteWindow,
   calculateSunsetAzimuth,
   destinationPoint,
   forecastUrl,

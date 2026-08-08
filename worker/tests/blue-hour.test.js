@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  SPOT_BLUE_HOUR_GUIDES,
   buildBlueHour,
   calculateBlueHourScore,
   getBlueHourTimes,
@@ -34,4 +35,25 @@ test('外滩蓝调输出时间、质量、AQI提示与城市摄影参数', () =>
   assert.equal(result.camera.whiteBalance, '3800K');
   assert.match(result.advice, /外滩全景与金色灯光/);
   assert.match(result.airQualityHint, /空气清洁/);
+});
+
+test('全部 19 个站点输出与地标匹配的蓝调摄影建议', () => {
+  assert.equal(Object.keys(SPOT_BLUE_HOUR_GUIDES).length, 19);
+  const cases = [
+    ['beijing', '故宫金瓦', '3800K'],
+    ['nanjing', '玄武湖倒影', '3600K'],
+    ['dunhuang', '月牙泉灯影', '3600K'],
+    ['hongkong', '维港天际线', '3800K'],
+  ];
+  for (const [spotId, scene, whiteBalance] of cases) {
+    const result = buildBlueHour({
+      date: '2026-07-18',
+      latitude: 31,
+      longitude: 120,
+      weather: { visibility: 20, cloudTotal: 20 },
+      spotId,
+    });
+    assert.match(result.advice, new RegExp(scene));
+    assert.equal(result.camera.whiteBalance, whiteBalance);
+  }
 });

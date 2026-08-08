@@ -120,13 +120,24 @@ test('全站天气统一区分晴、小雨、中雨、大雨与雷雨', () => {
   assert.equal(getWeatherMeta({ weatherCode: 95, precipitationRate: 1 }).label, '雷雨');
   assert.deepEqual(
     {
+      label: getWeatherMeta({ weatherText: '扬沙', precipitationRate: 0 }).label,
+      kind: getWeatherMeta({ weatherText: '扬沙', precipitationRate: 0 }).kind,
+    },
+    { label: '沙尘', kind: 'dust' }
+  );
+  assert.deepEqual(
+    {
       label: getWeatherMeta({ weatherText: '中雨', weatherProvider: 'qweather', precipitationRate: 0 }).label,
       source: getWeatherMeta({ weatherText: '中雨', weatherProvider: 'qweather', precipitationRate: 0 }).source,
     },
     { label: '中雨', source: 'qweather' }
   );
 
-  for (const spotId of ['xihu', 'waitan', 'beijing', 'erhai', 'chongqing', 'xiamen', 'qingdao', 'chengdu', 'shenzhen', 'huangshan']) {
+  for (const spotId of [
+    'xihu', 'waitan', 'beijing', 'erhai', 'chongqing', 'xiamen', 'qingdao',
+    'chengdu', 'shenzhen', 'huangshan', 'guangzhou', 'wuhan', 'sanya',
+    'xian', 'nanjing', 'xiapu', 'wuxi', 'hongkong', 'dunhuang',
+  ]) {
     const rain = calculateSunsetScore(
       spotId,
       { ...baseWeather, weatherCode: 63, precipitationRate: 3 },
@@ -143,6 +154,26 @@ test('西湖使用固定水面反射加分与提前15分钟标记', () => {
   assert.equal(result.timeOffsetMinutes, -15);
   assert.ok(result.corrections.some(item => item.item === '湖面镜像'));
   assert.equal(result.components.sceneBonus, 2);
+});
+
+test('敦煌将沙丘与通透度计入品质，强风沙尘只压低观测几率', () => {
+  const clearDesert = calculateSunsetScore(
+    'dunhuang',
+    { ...baseWeather, humidity: 28, visibility: 25, windSpeed: 4 },
+    { cloudLow: 5 }
+  );
+  const dusty = calculateSunsetScore(
+    'dunhuang',
+    { ...baseWeather, humidity: 28, visibility: 4, windSpeed: 13 },
+    { cloudLow: 5 }
+  );
+
+  assert.equal(clearDesert.components.sceneBonus, 5);
+  assert.equal(clearDesert.colorOverride.label, '大漠金橙');
+  assert.ok(clearDesert.corrections.some(item => item.item === '大漠通透'));
+  assert.equal(dusty.probability <= 10, true);
+  assert.ok(dusty.corrections.some(item => item.item === '强风扬沙'));
+  assert.ok(dusty.corrections.some(item => item.item === '沙尘低能见度'));
 });
 
 test('西湖大雨将质量分与观测成功率归零，微雨只压低成功率', () => {

@@ -17,3 +17,6 @@ node_modules/
 /3
 /business.jpg
 /微信图片_*.jpg
+
+# Agent / IDE project data (not source code)
+.codebuddy/

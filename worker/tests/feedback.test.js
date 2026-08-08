@@ -12,6 +12,7 @@ const {
   loadFeedbackMessages,
   loadFeedbackPhoto,
   normalizeFeedbackPayload,
+  optimizePhoto,
   paginateFeedbackMessages,
   saveFeedback,
 } = require('../src/services/feedback');
@@ -94,6 +95,11 @@ test('同设备同站点同日期更新同一条匿名留言', async t => {
     clientId: 'anonymous_client_123456',
     comment: '第一条现场留言。',
   };
+  const { getFeedbackRow } = require('../src/services/feedback-db');
+  const respondentHash = crypto.createHash('sha256').update(base.clientId).digest('hex');
+  const responseKey = crypto.createHash('sha256')
+    .update(`${respondentHash}:${base.spot}:${base.date}`)
+    .digest('hex');
 
   const first = await saveFeedback(root, base, prediction, new Date('2026-07-17T12:00:00.000Z'));
   const second = await saveFeedback(
@@ -102,21 +108,20 @@ test('同设备同站点同日期更新同一条匿名留言', async t => {
     prediction,
     new Date('2026-07-17T12:05:00.000Z')
   );
-  const files = await fs.readdir(path.join(root, base.date));
-  const saved = JSON.parse(await fs.readFile(path.join(root, base.date, files[0]), 'utf8'));
+  const saved = getFeedbackRow(root, responseKey);
 
   assert.equal(first.updated, false);
   assert.equal(second.updated, true);
-  assert.equal(files.length, 1);
   assert.equal(saved.comment, '更新后的现场留言。');
-  assert.equal(saved.prediction.quality, 68);
-  assert.equal(saved.prediction.rawQuality, 68);
-  assert.equal(saved.prediction.probability, 43);
-  assert.equal(saved.prediction.inputs.cloudHigh, 62);
-  assert.equal(saved.prediction.modelVersion, 'quality-v3');
-  assert.equal(saved.clientId, undefined);
-  assert.equal(saved.ip, undefined);
-  assert.match(saved.respondentHash, /^[a-f0-9]{64}$/);
+  const snap = JSON.parse(saved.prediction_json);
+  assert.equal(snap.quality, 68);
+  assert.equal(snap.rawQuality, 68);
+  assert.equal(snap.probability, 43);
+  assert.equal(snap.inputs.cloudHigh, 62);
+  assert.equal(snap.modelVersion, 'quality-v3');
+  assert.equal(second.record.clientId, undefined);
+  assert.equal(second.record.ip, undefined);
+  assert.match(second.record.respondentHash, /^[a-f0-9]{64}$/);
 });
 
 test('实况照片独立保存且更新时可保留或移除', async t => {
@@ -131,27 +136,30 @@ test('实况照片独立保存且更新时可保留或移除', async t => {
       dataUrl: `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64')}`,
     },
   };
+  const { getFeedbackRow } = require('../src/services/feedback-db');
+  const respondentHash = crypto.createHash('sha256').update(base.clientId).digest('hex');
+  const responseKey = crypto.createHash('sha256')
+    .update(`${respondentHash}:${base.spot}:${base.date}`)
+    .digest('hex');
 
   const first = await saveFeedback(root, base, prediction);
-  const recordFile = path.join(root, base.date, `${first.record.responseKey}.json`);
-  const firstRecord = JSON.parse(await fs.readFile(recordFile, 'utf8'));
-  const photoFile = path.join(root, firstRecord.photo.file);
+  const firstRecord = getFeedbackRow(root, responseKey);
+  const photoFile = path.join(root, firstRecord.photo_file);
 
-  assert.equal(firstRecord.schemaVersion, 3);
-  assert.equal(firstRecord.kind, 'spot-message');
+  assert.equal(firstRecord.schema_version, 3);
   assert.equal(firstRecord.comment, '湖面反光很明显。');
-  assert.equal(firstRecord.photo.mimeType, 'image/jpeg');
-  assert.equal(firstRecord.photo.dataUrl, undefined);
+  assert.equal(firstRecord.photo_mime, 'image/jpeg');
+  // 4 字节假图无法被 sharp 解码，降级为原图存储
   assert.deepEqual([...await fs.readFile(photoFile)], [0xff, 0xd8, 0xff, 0xd9]);
 
   await saveFeedback(root, { ...base, photo: undefined, comment: '余晖持续约十五分钟。' }, prediction);
-  const keptRecord = JSON.parse(await fs.readFile(recordFile, 'utf8'));
-  assert.equal(keptRecord.photo.file, firstRecord.photo.file);
+  const keptRecord = getFeedbackRow(root, responseKey);
+  assert.equal(keptRecord.photo_file, firstRecord.photo_file);
   assert.equal(keptRecord.comment, '余晖持续约十五分钟。');
 
   await saveFeedback(root, { ...base, photo: undefined, removePhoto: true }, prediction);
-  const removedRecord = JSON.parse(await fs.readFile(recordFile, 'utf8'));
-  assert.equal(removedRecord.photo, null);
+  const removedRecord = getFeedbackRow(root, responseKey);
+  assert.equal(removedRecord.photo_file, null);
   await assert.rejects(fs.access(photoFile), { code: 'ENOENT' });
 });
 
@@ -168,17 +176,31 @@ test('空留言不能发布，旧版观测真值在更新留言时被保留', as
   const responseKey = crypto.createHash('sha256')
     .update(`${respondentHash}:${payload.spot}:${payload.date}`)
     .digest('hex');
-  const directory = path.join(root, payload.date);
-  await fs.mkdir(directory, { recursive: true });
-  await fs.writeFile(path.join(directory, `${responseKey}.json`), JSON.stringify({
-    responseKey,
+  const { saveFeedbackRow } = require('../src/services/feedback-db');
+  // 旧版观测真值直接写入 SQLite，模拟迁移后的历史行
+  saveFeedbackRow(root, {
+    response_key: responseKey,
+    respondent_hash: respondentHash,
     spot: payload.spot,
     date: payload.date,
-    observed: true,
-    actualQuality: 80,
-    actualQualityLabel: '很棒',
-    recordedAt: '2026-07-17T12:00:00.000Z',
-  }));
+    comment: '',
+    photo_file: null,
+    photo_mime: null,
+    photo_size: null,
+    photo_sha256: null,
+    observed: 1,
+    actual_quality: 80,
+    actual_quality_label: '很棒',
+    raw_quality: null,
+    quality: null,
+    probability: null,
+    grade: null,
+    model_version: null,
+    source: null,
+    prediction_json: null,
+    recorded_at: '2026-07-17T12:00:00.000Z',
+    schema_version: 3,
+  });
 
   const saved = await saveFeedback(root, payload, prediction);
   assert.deepEqual(saved.record.legacyGroundTruth, {
@@ -235,4 +257,14 @@ test('按地区读取跨日期留言并分页，公开数据不包含匿名哈�
   assert.equal(secondPage.nextCursor, null);
   assert.equal(photo.contentType, 'image/jpeg');
   assert.deepEqual([...photo.body], [0xff, 0xd8, 0xff, 0xd9]);
+});
+
+test('真实图片在落盘前被压缩为 WebP 并剥离 EXIF', async () => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQAY3Y2wAAAAAElFTkSuQmCC', 'base64');
+  const optimized = await optimizePhoto({ mimeType: 'image/png', extension: 'png', bytes: png });
+  assert.equal(optimized.mimeType, 'image/webp');
+  assert.equal(optimized.extension, 'webp');
+  assert.ok(optimized.bytes.length > 0);
+  assert.equal(optimized.bytes.subarray(0, 4).toString('ascii'), 'RIFF');
+  assert.equal(optimized.bytes.subarray(8, 12).toString('ascii'), 'WEBP');
 });

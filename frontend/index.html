@@ -4,14 +4,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#070b14">
+  <base href="/">
+  <!-- SEO_HEAD_START -->
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
   <meta name="description" content="专业提供杭州西湖、上海外滩等热门景区晚霞、火烧云精准预测。结合 250hPa 高空湿度与格点气象算法，为摄影师提供机位建议与参数指导。">
-  <meta name="keywords" content="晚霞预测, 火烧云预报, 西湖摄影, 外滩日落, 摄影机位, 杭州天气">
+  <meta name="keywords" content="晚霞预测, 火烧云预报, 日落时间, 蓝调时刻, 摄影机位, 天气摄影">
+  <link rel="canonical" href="https://sunsetpredict.cloud/">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Sunset Predict">
+  <meta property="og:title" content="晚霞预测 - 今日火烧云概率与摄影指南 | Sunset Predict">
+  <meta property="og:description" content="专业提供杭州西湖、上海外滩等热门景区晚霞、火烧云精准预测。结合 250hPa 高空湿度与格点气象算法，为摄影师提供机位建议与参数指导。">
+  <meta property="og:url" content="https://sunsetpredict.cloud/">
+  <meta property="og:image" content="https://sunsetpredict.cloud/assets/xihu-sunset.webp">
+  <meta property="og:image:alt" content="杭州西湖晚霞摄影景观">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="晚霞预测 - 今日火烧云概率与摄影指南 | Sunset Predict">
+  <meta name="twitter:description" content="专业提供杭州西湖、上海外滩等热门景区晚霞、火烧云精准预测。结合 250hPa 高空湿度与格点气象算法，为摄影师提供机位建议与参数指导。">
+  <meta name="twitter:image" content="https://sunsetpredict.cloud/assets/xihu-sunset.webp">
   <title>晚霞预测 - 今日火烧云概率与摄影指南 | Sunset Predict</title>
+  <script id="seo-structured-data" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://sunsetpredict.cloud/#website","url":"https://sunsetpredict.cloud/","name":"Sunset Predict","alternateName":"晚霞预测","description":"专业提供杭州西湖、上海外滩等热门景区晚霞、火烧云精准预测。结合 250hPa 高空湿度与格点气象算法，为摄影师提供机位建议与参数指导。","inLanguage":"zh-CN"}]}</script>
+  <!-- SEO_HEAD_END -->
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@500;600&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260726-spot-messages-v32">
+  <link rel="stylesheet" href="css/styles.css?v=20260726-nanjing-v44">
   <script async src="https://unpkg.com/lucide@1.25.0/dist/umd/lucide.min.js"></script>
   <script
     defer
@@ -57,11 +75,10 @@
 
     <!-- 双列流：西湖预测卡片 + 外滩数据接入卡片 -->
     <section class="card-grid" aria-label="景区晚霞预测">
-      <article
+      <a
         class="card card--active"
         id="card-xihu"
-        role="button"
-        tabindex="0"
+        href="/spots/xihu"
         aria-expanded="false"
         aria-controls="detail-panel"
         aria-label="西湖今日晚霞预报，点击展开摄影指南"
@@ -95,6 +112,10 @@
 
             <div class="card__grade-row">
               <span class="grade-chip" id="grade-tag">计算中</span>
+              <span class="card__blue-hour" id="xihu-blue-hour" hidden>
+                <i data-lucide="moon-star" aria-hidden="true"></i>
+                <span>蓝调 --:--–--:--</span>
+              </span>
             </div>
 
             <div class="probability-pill" id="xihu-probability">
@@ -109,6 +130,10 @@
 
             <div class="card__footer">
               <span class="card__updated">更新于 <span id="update-time">--:--</span></span>
+              <span class="card__sunset-hook" id="sunset-hook" hidden>
+                <i data-lucide="clock" aria-hidden="true"></i>
+                <span id="sunset-hook-text">距今日日落 --</span>
+              </span>
               <span class="card__expand-hint" id="expand-hint">
                 <span>摄影指南</span>
                 <i data-lucide="chevron-down" aria-hidden="true"></i>
@@ -116,13 +141,12 @@
             </div>
           </div>
         </div>
-      </article>
+      </a>
 
-      <article
+      <a
         class="card card--preview"
         id="card-bund"
-        role="button"
-        tabindex="0"
+        href="/spots/waitan"
         aria-expanded="false"
         aria-controls="detail-panel"
         aria-label="上海外滩预测已解锁，数据正在接入"
@@ -152,7 +176,13 @@
               <span id="waitan-score-value">--</span>
               <small>/ 100</small>
             </div>
-            <span class="card__preview-grade" id="waitan-grade">等待实时评分</span>
+            <div class="card__preview-grade-row">
+              <span class="card__preview-grade" id="waitan-grade">等待实时评分</span>
+              <span class="card__blue-hour" id="waitan-blue-hour" hidden>
+                <i data-lucide="moon-star" aria-hidden="true"></i>
+                <span>蓝调 --:--–--:--</span>
+              </span>
+            </div>
             <div class="probability-pill" id="waitan-probability">
               <i data-lucide="shield" aria-hidden="true"></i>
               <span>观测成功率 --%</span>
@@ -165,7 +195,7 @@
             <p class="card__preview-note">上海站 · Beta</p>
           </div>
         </div>
-      </article>
+      </a>
 
       <button class="detail-overlay" id="detail-overlay" type="button" aria-label="关闭摄影指南" aria-hidden="true" tabindex="-1"></button>
 
@@ -415,10 +445,12 @@
           <span class="regional__eyebrow">National photography spots</span>
           <h2 class="regional__title" id="regional-title">全国摄影站</h2>
         </div>
-        <span class="regional__note">8 个站点 · 实时试运行</span>
+        <span class="regional__note">17 个站点 · 实时试运行</span>
       </div>
       <div class="city-grid" id="regional-grid" aria-live="polite"></div>
     </section>
+
+    <!-- SPOT_LANDING -->
 
     <footer class="site-footer">
       <section class="support glass-panel" aria-labelledby="support-title">
@@ -499,6 +531,6 @@
     </div>
   </div>
 
-  <script src="js/app.js?v=20260726-detail-actions-v34"></script>
+  <script src="js/app.js?v=20260808-card-route-v52"></script>
 </body>
 </html>

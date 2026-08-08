@@ -17,7 +17,24 @@ test('Umami 自动记录页面访问但排除查询参数与详情哈希', () =>
 });
 
 test('Umami 业务事件只发送固定事件名和站点', () => {
-  for (const eventName of ['detail-open', 'date-change', 'feedback-submit', 'support-open', 'partner-open']) {
+  for (const eventName of [
+    'spot-card-click',
+    'spot-card-exit',
+    'spot-card-fast-exit',
+    'detail-open',
+    'detail-close',
+    'detail-page-exit',
+    'date-change',
+    'timeline-node-open',
+    'message-more',
+    'feedback-photo-select',
+    'feedback-submit',
+    'share-open',
+    'share-complete',
+    'share-save',
+    'support-open',
+    'partner-open',
+  ]) {
     assert.match(app, new RegExp(`'${eventName}'`));
   }
   const trackerBody = app.match(/function trackUmamiEvent[\s\S]*?\n}/)?.[0] || '';
@@ -25,4 +42,24 @@ test('Umami 业务事件只发送固定事件名和站点', () => {
   assert.match(app, /window\.umami\.track\(eventName, \{ spot: safeSpot \}\)/);
   assert.doesNotMatch(trackerBody, /observed|actualQuality|clientId|weather|quality|probability|feedbackDraft/);
   assert.doesNotMatch(app, /window\.umami\.identify/);
+});
+
+test('地点详情区分卡片点击、主动关闭与离站退出', () => {
+  assert.match(app, /openDetail\('xihu', \{ source: 'card' \}\)/);
+  assert.match(app, /openDetail\('waitan', \{ source: 'card' \}\)/);
+  assert.match(app, /\.city-card'\)\.forEach\(card => \{[\s\S]*?trackUmamiEvent\('spot-card-click', card\.dataset\.spot\)/);
+  assert.match(app, /window\.addEventListener\('pagehide', trackDetailPageExit\)/);
+  assert.match(app, /event\?\.persisted/);
+  assert.match(app, /trackUmamiEvent\('detail-close', closingSpot\)/);
+  assert.match(app, /trackUmamiEvent\('spot-card-exit', activeDetailSpot\)/);
+  assert.match(app, /Date\.now\(\) - detailOpenedAt < DETAIL_FAST_EXIT_MS/);
+});
+
+test('分享、时间轴和留言行为只关联当前站点', () => {
+  assert.match(app, /trackUmamiEvent\('share-open', activeDetailSpot\)/);
+  assert.match(app, /trackUmamiEvent\('share-complete', activeDetailSpot\)/);
+  assert.match(app, /trackUmamiEvent\('share-save', activeDetailSpot\)/);
+  assert.match(app, /trackUmamiEvent\('timeline-node-open', activeDetailSpot\)/);
+  assert.match(app, /trackUmamiEvent\('message-more', feedbackMessages\.spot\)/);
+  assert.match(app, /trackUmamiEvent\('feedback-photo-select', feedbackDraft\.spot\)/);
 });

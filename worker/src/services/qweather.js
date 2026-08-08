@@ -22,22 +22,31 @@ async function fetchQWeatherHourly(point, options = {}) {
   url.searchParams.set('lang', 'zh');
   url.searchParams.set('unit', 'm');
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), options.qweatherTimeoutMs || 8000);
-  try {
-    const response = await fetchImpl(url, {
-      headers: { 'X-QW-Api-Key': config.apiKey },
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error(`QWeather HTTP ${response.status}`);
-    const payload = await response.json();
-    if (payload?.code !== '200' || !Array.isArray(payload.hourly)) {
-      throw new Error(`QWeather API ${payload?.code || 'invalid-response'}`);
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), options.qweatherTimeoutMs || 8000);
+    try {
+      const response = await fetchImpl(url, {
+        headers: { 'X-QW-Api-Key': config.apiKey },
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`QWeather HTTP ${response.status}`);
+      const payload = await response.json();
+      if (payload?.code !== '200' || !Array.isArray(payload.hourly)) {
+        throw new Error(`QWeather API ${payload?.code || 'invalid-response'}`);
+      }
+      return payload;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    } finally {
+      clearTimeout(timer);
     }
-    return payload;
-  } finally {
-    clearTimeout(timer);
   }
+  throw lastError;
 }
 
 function sampleQWeather(payload, localTime) {

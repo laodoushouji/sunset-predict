@@ -54,3 +54,27 @@ test('QWeather 取最近日落小时并只覆盖天气现象字段', () => {
   assert.equal(merged.precipitationProbability, 88);
   assert.equal(merged.weatherProvider, 'qweather');
 });
+
+test('QWeather 冷启动瞬时失败后自动重试一次', async () => {
+  let attempts = 0;
+  const payload = {
+    code: '200',
+    hourly: [{ fxTime: '2026-07-26T19:00+08:00', text: '晴', precip: '0', pop: '0' }],
+  };
+  const result = await fetchQWeatherHourly(
+    { lat: 22.294, lon: 114.169 },
+    {
+      qweatherHost: 'example.qweatherapi.com',
+      qweatherApiKey: 'test-key',
+      fetchImpl: async () => {
+        attempts += 1;
+        return attempts === 1
+          ? new Response('{}', { status: 429 })
+          : new Response(JSON.stringify(payload), { status: 200 });
+      },
+    }
+  );
+
+  assert.equal(attempts, 2);
+  assert.equal(result.code, '200');
+});

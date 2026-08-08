@@ -154,6 +154,58 @@ button,
   margin-bottom: 30px;
 }
 
+.spot-landing {
+  margin: -6px 0 24px;
+  padding: clamp(18px, 3vw, 28px);
+  border-radius: 24px;
+}
+
+.spot-landing__eyebrow {
+  display: block;
+  margin-bottom: 7px;
+  color: #d5a98f;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.spot-landing h2,
+.spot-landing p {
+  margin: 0;
+}
+
+.spot-landing h2 {
+  font-family: "Noto Serif SC", serif;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  font-weight: 600;
+}
+
+.spot-landing p {
+  max-width: 780px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.8;
+}
+
+.spot-landing .spot-landing__today {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.spot-landing a {
+  display: inline-block;
+  margin-top: 12px;
+  color: #e1b493;
+  font-size: 0.72rem;
+  text-decoration: none;
+}
+
+.spot-landing a:hover,
+.spot-landing a:focus-visible {
+  text-decoration: underline;
+}
+
 .day-switcher {
   position: relative;
   display: grid;
@@ -346,14 +398,17 @@ button,
 
 .card {
   position: relative;
+  display: block;
   min-width: 0;
   min-height: 440px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--glass);
+  color: inherit;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.28);
   isolation: isolate;
+  text-decoration: none;
 }
 
 .card::after {
@@ -427,6 +482,7 @@ button,
 .card__topline,
 .card__footer,
 .card__grade-row,
+.card__preview-grade-row,
 .detail__heading,
 .footer {
   display: flex;
@@ -479,6 +535,7 @@ button,
 .weather-badge.cloudy,
 .weather-badge.overcast { border-color: rgba(196, 207, 225, 0.24); background: rgba(75, 86, 108, 0.34); color: #e0e6f0; }
 .weather-badge.fog { border-color: rgba(187, 193, 202, 0.2); background: rgba(95, 100, 111, 0.4); color: #d3d5d9; }
+.weather-badge.dust { border-color: rgba(222, 169, 105, 0.28); background: rgba(112, 74, 43, 0.42); color: #f1cf9f; }
 .weather-badge.rain-light { border-color: rgba(105, 204, 232, 0.34); background: rgba(25, 105, 137, 0.38); color: #a9e9fa; }
 .weather-badge.rain-medium { border-color: rgba(94, 157, 255, 0.38); background: rgba(30, 70, 139, 0.46); color: #b9d4ff; }
 .weather-badge.rain-heavy { border-color: rgba(255, 125, 105, 0.42); background: rgba(130, 43, 48, 0.5); color: #ffc0b6; }
@@ -556,6 +613,32 @@ button,
 .probability-pill.high svg {
   filter: drop-shadow(0 0 7px rgba(104, 222, 159, 0.62));
   animation: probability-pulse 2.6s ease-in-out infinite;
+}
+
+.card__blue-hour,
+.city-card__blue-hour {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 5px;
+  color: #b8d5ff;
+  font-size: 0.63rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.card__blue-hour[hidden],
+.city-card__blue-hour[hidden] {
+  display: none;
+}
+
+.card__blue-hour svg,
+.city-card__blue-hour svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  filter: drop-shadow(0 0 7px rgba(116, 169, 255, 0.4));
 }
 
 @keyframes probability-pulse {
@@ -641,6 +724,23 @@ button,
 .card__updated {
   color: rgba(255, 255, 255, 0.36);
   font-size: 0.65rem;
+}
+
+.card__sunset-hook {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255, 214, 160, 0.82);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.card__sunset-hook svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
 }
 
 .card__expand-hint {
@@ -809,10 +909,15 @@ button,
 }
 
 .card__grade-row,
-.card__preview-grade {
+.card__preview-grade-row {
   grid-row: 3;
   align-self: center;
   margin: 0;
+}
+
+.card__preview-grade-row {
+  min-width: 0;
+  gap: 10px;
 }
 
 #xihu-probability,
@@ -891,16 +996,19 @@ button,
 .city-card {
   --city-scene: linear-gradient(145deg, #423a47, #141923);
   position: relative;
+  display: block;
   min-width: 0;
   min-height: 292px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 24px;
   background: var(--city-scene);
+  color: inherit;
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.24);
   cursor: pointer;
   isolation: isolate;
   outline: none;
+  text-decoration: none;
   transition: transform 400ms var(--ease-out), border-color 400ms ease, box-shadow 400ms ease;
 }
 
@@ -932,6 +1040,15 @@ button,
 .city-card--chengdu .city-card__image { object-position: 50% 46%; }
 .city-card--shenzhen .city-card__image { object-position: 50% 50%; }
 .city-card--huangshan .city-card__image { object-position: 50% 48%; }
+.city-card--guangzhou .city-card__image { object-position: 50% 50%; }
+.city-card--wuhan .city-card__image { object-position: 50% 48%; }
+.city-card--sanya .city-card__image { object-position: 50% 56%; }
+.city-card--xian .city-card__image { object-position: 50% 46%; }
+.city-card--nanjing .city-card__image { object-position: 58% 52%; }
+.city-card--xiapu .city-card__image { object-position: 50% 54%; }
+.city-card--wuxi .city-card__image { object-position: 50% 54%; }
+.city-card--hongkong .city-card__image { object-position: 61% 50%; }
+.city-card--dunhuang .city-card__image { object-position: 50% 58%; }
 
 .city-card::before {
   z-index: -1;
@@ -969,6 +1086,15 @@ button,
 .city-card--chengdu { --city-scene: linear-gradient(150deg, #5d506c 0%, #c07378 45%, #171b2b 100%); }
 .city-card--shenzhen { --city-scene: linear-gradient(150deg, #374f70 0%, #a95f7c 44%, #111a30 100%); }
 .city-card--huangshan { --city-scene: linear-gradient(150deg, #586372 0%, #ce8d68 42%, #17212a 100%); }
+.city-card--guangzhou { --city-scene: linear-gradient(150deg, #4d526f 0%, #ce775e 44%, #141a2d 100%); }
+.city-card--wuhan { --city-scene: linear-gradient(150deg, #72534c 0%, #cf8c5a 44%, #211b25 100%); }
+.city-card--sanya { --city-scene: linear-gradient(150deg, #486f8a 0%, #e67b47 46%, #162b3a 100%); }
+.city-card--xian { --city-scene: linear-gradient(150deg, #6a504a 0%, #c78355 44%, #211a22 100%); }
+.city-card--nanjing { --city-scene: linear-gradient(150deg, #536f83 0%, #cf806b 44%, #172637 100%); }
+.city-card--xiapu { --city-scene: linear-gradient(150deg, #4d7182 0%, #d06f58 44%, #162737 100%); }
+.city-card--wuxi { --city-scene: linear-gradient(150deg, #4f728b 0%, #d58a61 46%, #192b38 100%); }
+.city-card--hongkong { --city-scene: linear-gradient(150deg, #5e526e 0%, #c46f7d 44%, #17223a 100%); }
+.city-card--dunhuang { --city-scene: linear-gradient(150deg, #8b653f 0%, #d89555 44%, #31251f 100%); }
 
 .city-card__content {
   display: flex;
@@ -1065,6 +1191,12 @@ button,
 .city-card__grade.orange { color: #ffd08f; }
 .city-card__grade.purple { color: #dbbdff; }
 .city-card__grade.blue { color: #b9d9f7; }
+
+.city-card__blue-hour {
+  margin-top: 7px;
+  color: #c2dcff;
+  font-size: 0.6rem;
+}
 
 .city-card__progress {
   height: 4px;
@@ -2527,7 +2659,8 @@ body.detail-open {
     display: none;
   }
 
-  .card__grade-row {
+  .card__grade-row,
+  .card__preview-grade-row {
     align-items: flex-start;
     flex-direction: column;
     gap: 8px;
@@ -2732,6 +2865,10 @@ body.detail-open {
     font-size: 2.6rem;
   }
 
+  .city-card__blue-hour {
+    font-size: 0.56rem;
+  }
+
   .city-card__unit,
   .city-card__status {
     display: none;
@@ -2773,4 +2910,117 @@ body.detail-open {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* SEO 指南折叠块：默认收起，置于详情页底部，不干扰主视觉 */
+.seo-guide {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+}
+.seo-guide > summary {
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted, rgba(241, 241, 244, 0.58));
+}
+.seo-guide > summary::-webkit-details-marker { display: none; }
+.seo-guide > summary::before { content: "▸"; transition: transform 0.2s ease; }
+.seo-guide[open] > summary::before { content: "▾"; }
+.seo-guide__body {
+  margin-top: 14px;
+  color: var(--muted, rgba(241, 241, 244, 0.58));
+  font-size: 0.9rem;
+  line-height: 1.75;
+}
+.seo-guide__section { margin-bottom: 16px; }
+.seo-guide__section h3 {
+  margin: 0 0 6px;
+  font-size: 0.98rem;
+  color: rgba(241, 241, 244, 0.8);
+}
+.seo-guide__faq { margin: 0; }
+.seo-guide__faq dt { font-weight: 600; color: rgba(241, 241, 244, 0.78); margin-top: 10px; }
+.seo-guide__faq dd { margin: 4px 0 0; }
+.seo-guide__links {
+  margin-top: 18px;
+  font-size: 0.78rem;
+  line-height: 2.1;
+  color: var(--faint, rgba(241, 241, 244, 0.34));
+}
+.seo-guide__links-title { margin-right: 4px; }
+.seo-guide__links a {
+  color: rgba(160, 200, 255, 0.7);
+  text-decoration: none;
+  margin-right: 12px;
+}
+.seo-guide__links a:hover { text-decoration: underline; }
+
+/* ---- SEO 落地页：今日概率块 / 机位 Top3 / 高分照片墙 ---- */
+.spot-landing__live {
+  margin: 18px 0;
+  padding: 14px 18px;
+  border: 1px solid rgba(255, 176, 97, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 148, 77, 0.06);
+}
+.spot-landing__live-title {
+  margin: 0 0 6px;
+  font-size: 0.92rem;
+  color: rgba(255, 200, 150, 0.9);
+}
+.spot-landing__live-numbers {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+  color: rgba(241, 241, 244, 0.9);
+}
+.spot-landing__live-numbers strong {
+  font-size: 1.5rem;
+  color: rgba(255, 176, 97, 0.95);
+}
+.spot-landing__top-spots { margin: 18px 0; }
+.spot-landing__top-spots h3,
+.spot-landing__gallery h3 {
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+  color: rgba(241, 241, 244, 0.78);
+}
+.spot-landing__rank {
+  margin: 0;
+  padding-left: 22px;
+  font-size: 0.85rem;
+  line-height: 1.9;
+  color: rgba(241, 241, 244, 0.62);
+}
+.spot-landing__rank strong { color: rgba(241, 241, 244, 0.88); }
+.spot-landing__gallery { margin: 18px 0; }
+.spot-landing__gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+.spot-landing__gallery-item {
+  margin: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+.spot-landing__gallery-item img {
+  display: block;
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+}
+.spot-landing__gallery-item figcaption {
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  color: rgba(241, 241, 244, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

@@ -20,6 +20,15 @@ const SCORE_PLUGIN_CONFIG = {
   qingdao: { visibilityFullKm: 24 },
   chengdu: { visibilityFullKm: 12 },
   shenzhen: { visibilityFullKm: 24 },
+  guangzhou: { visibilityFullKm: 24 },
+  wuhan: { visibilityFullKm: 24 },
+  sanya: { visibilityFullKm: 24 },
+  xian: { visibilityFullKm: 24 },
+  nanjing: { visibilityFullKm: 24 },
+  xiapu: { visibilityFullKm: 24 },
+  wuxi: { visibilityFullKm: 24 },
+  hongkong: { visibilityFullKm: 24 },
+  dunhuang: { visibilityFullKm: 24 },
 };
 
 function clamp(value, min = 0, max = 100) {
@@ -76,7 +85,10 @@ function getWeatherMeta(weather = {}) {
   } else if (weatherText.includes('雪') || snowCodes.has(weatherCode)) {
     label = '小雪';
     kind = 'snow-light';
-  } else if (/[雾霾沙尘]/.test(weatherText) || [45, 48].includes(weatherCode)) {
+  } else if (/[沙尘]/.test(weatherText)) {
+    label = '沙尘';
+    kind = 'dust';
+  } else if (/[雾霾]/.test(weatherText) || [45, 48].includes(weatherCode)) {
     label = '雾';
     kind = 'fog';
   } else if (weatherText.includes('阴') || weatherCode === 3) {
@@ -377,6 +389,31 @@ function calculateSunsetScore(spotId, weather, remoteWeather = null, context = {
       probabilityMultiplier *= 0.6;
       colorOverride = { label: '灰蒙蒙', hint: 'haze', desc: '东南海风叠加高湿，海雾消光明显' };
       corrections.push({ item: '深圳湾海雾', value: '几率 ×0.6', desc: `东南风且湿度${weather.humidity}%` });
+    }
+  }
+
+  if (normalizedSpotId === 'dunhuang') {
+    addSceneBonus(2, '沙丘暖色反射', '鸣沙山暖色沙面提供固定景观加成');
+    if (weather.humidity < 35 && weather.visibility >= 20) {
+      addSceneBonus(3, '大漠通透', `湿度${weather.humidity}%且能见度${weather.visibility}km，沙海层次清晰`);
+      colorOverride = { label: '大漠金橙', hint: 'gold', desc: '低湿通透空气与暖色沙丘增强金橙色层次' };
+    }
+    if (weather.windSpeed >= 12) {
+      probabilityMultiplier *= 0.65;
+      corrections.push({ item: '强风扬沙', value: '几率 ×0.65', desc: `地面风速${weather.windSpeed}m/s，扬沙与器材稳定性风险增加` });
+    }
+    if (weather.windSpeed >= 8 && weather.visibility < 8) {
+      probabilityCap = Math.min(probabilityCap, 20);
+      corrections.push({ item: '风沙遮光', value: '几率 ≤20%', desc: `风速${weather.windSpeed}m/s且能见度${weather.visibility}km，沙尘可能遮挡落日` });
+    }
+    if (weather.visibility < 5) {
+      probabilityCap = Math.min(probabilityCap, 10);
+      corrections.push({ item: '沙尘低能见度', value: '几率 ≤10%', desc: `能见度${weather.visibility}km，地平线光路难以辨认` });
+    }
+    if (/[沙尘]/.test(weather.weatherText || '')) {
+      probabilityCap = Math.min(probabilityCap, 10);
+      adjustQuality(-5, '沙尘消光', `${weather.weatherText}削弱天空对比度与地平线通透度`);
+      corrections.push({ item: '沙尘遮光', value: '几率 ≤10%', desc: '和风天气识别到沙尘现象，落日光路存在明显阻断' });
     }
   }
 

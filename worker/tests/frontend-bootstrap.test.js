@@ -54,6 +54,7 @@ test('首屏 JSON 安全注入占位节点并由前端即时渲染', () => {
   assert.match(output, /\\u003c\/script>/);
   assert.match(app, /function readForecastBootstrap/);
   assert.match(app, /applyTimelinePayload\(bootstrap\)/);
+  assert.match(app, /requestAnimationFrame\(openDetailFromUrl\)/);
 });
 
 test('首屏不再依赖同步 Tailwind 与 Lucide 加载', () => {

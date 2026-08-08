@@ -2,3 +2,13 @@
 QWEATHER_API_HOST=
 QWEATHER_API_KEY=
 WAQI_TOKEN=
+
+# --- P1 站长平台验证（可选，不配置则线上无验证 meta）---
+# 部署到 ECS 时，把这两个值写进服务器上的 /root/sunset-predict-v2.env（即部署用的 staging env），
+# remote-deploy.sh 会把它移到 /root/sunset-predict-v2/.env，再由 systemd 的 EnvironmentFile 加载，
+# server.mjs 读取后注入 <meta name="google-site-verification"> / <meta name="baidu-site-verification">。
+# 取值来源：
+#   GOOGLE_SITE_VERIFICATION  -> Google Search Console：「设置 → 所有权验证 → 网页标记」里的 content 值
+#   BAIDU_SITE_VERIFICATION   -> 百度搜索资源平台：「站点管理 → 添加网站 → HTML 标签验证」里的 content 值
+GOOGLE_SITE_VERIFICATION=
+BAIDU_SITE_VERIFICATION=

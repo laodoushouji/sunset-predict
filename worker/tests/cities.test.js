@@ -61,10 +61,12 @@ function createFetch() {
   };
 }
 
-test('配置包含 8 个新增摄影站点', () => {
+test('配置包含 17 个全国摄影站点', () => {
   assert.deepEqual(Object.keys(CITY_SPOTS), [
     'beijing', 'erhai', 'chongqing', 'xiamen',
     'qingdao', 'chengdu', 'shenzhen', 'huangshan',
+    'guangzhou', 'wuhan', 'sanya', 'xian',
+    'nanjing', 'xiapu', 'wuxi', 'hongkong', 'dunhuang',
   ]);
 });
 
@@ -89,6 +91,8 @@ test('单站数据服务返回三日预测与日落时间', async () => {
   assert.equal(result.forecast.length, 3);
   assert.equal(result.days.length, 3);
   assert.equal(result.sunTimes.sunset, '19:00');
+  assert.equal(result.blueHour.available, true);
+  assert.match(`${result.blueHour.start}–${result.blueHour.end}`, /^\d{2}:\d{2}–\d{2}:\d{2}$/);
   assert.equal(result.sourceStatus.westernWindow, 'connected');
   assert.equal(typeof result.quality, 'number');
   assert.equal(typeof result.rawQuality, 'number');
@@ -135,7 +139,7 @@ test('jingshan API 别名复用北京景山模型', async () => {
   assert.equal(result.source, 'beijing-model-v3');
 });
 
-test('聚合服务返回全部 8 个站点', async () => {
+test('聚合服务返回全部 17 个站点', async () => {
   let requests = 0;
   const fetchImpl = async url => {
     requests += 1;
@@ -143,13 +147,14 @@ test('聚合服务返回全部 8 个站点', async () => {
   };
   const result = await getAllCityPredictions({ fetchImpl });
 
-  assert.equal(result.spots.length, 8);
+  assert.equal(result.spots.length, 17);
   assert.equal(requests, 2);
   assert.equal(result.spots.every(item => typeof item.quality === 'number'), true);
   assert.equal(result.spots.every(item => typeof item.rawQuality === 'number'), true);
   assert.equal(result.spots.every(item => typeof item.probability === 'number'), true);
   assert.equal(result.spots.every(item => Number.isFinite(item.metrics?.windowTransparency)), true);
   assert.equal(result.spots.every(item => item.weather?.label === '多云'), true);
+  assert.equal(result.spots.every(item => item.blueHour?.available), true);
 });
 
 test('全国站上游失败时返回完整的最近成功快照', async t => {
@@ -166,7 +171,7 @@ test('全国站上游失败时返回完整的最近成功快照', async t => {
 
   assert.equal(live.cacheStatus, 'live');
   assert.equal(fallback.cacheStatus, 'stale');
-  assert.equal(fallback.spots.length, 8);
+  assert.equal(fallback.spots.length, 17);
   assert.equal(fallback.spots.every(item => typeof item.quality === 'number' && !item.error), true);
   assert.equal(fallback.spots.every(item => item.sourceStatus.openMeteo === 'stale-cache'), true);
 });
