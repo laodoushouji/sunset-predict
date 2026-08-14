@@ -6,6 +6,8 @@ const path = require('node:path');
 
 const {
   CITY_SPOTS,
+  FORECAST_SPOTS,
+  PROVINCE_SPOTS,
   getAllCityPredictions,
   getCityPrediction,
   predictRegionalSpot,
@@ -139,7 +141,7 @@ test('jingshan API 别名复用北京景山模型', async () => {
   assert.equal(result.source, 'beijing-model-v3');
 });
 
-test('聚合服务返回全部 17 个站点', async () => {
+test('聚合服务返回全部 35 个站点', async () => {
   let requests = 0;
   const fetchImpl = async url => {
     requests += 1;
@@ -147,7 +149,7 @@ test('聚合服务返回全部 17 个站点', async () => {
   };
   const result = await getAllCityPredictions({ fetchImpl });
 
-  assert.equal(result.spots.length, 17);
+  assert.equal(result.spots.length, 35);
   assert.equal(requests, 2);
   assert.equal(result.spots.every(item => typeof item.quality === 'number'), true);
   assert.equal(result.spots.every(item => typeof item.rawQuality === 'number'), true);
@@ -171,9 +173,29 @@ test('全国站上游失败时返回完整的最近成功快照', async t => {
 
   assert.equal(live.cacheStatus, 'live');
   assert.equal(fallback.cacheStatus, 'stale');
-  assert.equal(fallback.spots.length, 17);
+  assert.equal(fallback.spots.length, 35);
   assert.equal(fallback.spots.every(item => typeof item.quality === 'number' && !item.error), true);
   assert.equal(fallback.spots.every(item => item.sourceStatus.openMeteo === 'stale-cache'), true);
+});
+
+test('新增省份站点使用统一模型返回三日预测且不额外调用 QWeather', async () => {
+  let requests = 0;
+  const result = await getCityPrediction('hukou', {
+    fetchImpl: async url => {
+      requests += 1;
+      return createFetch()(url);
+    },
+  });
+
+  assert.equal(Object.keys(PROVINCE_SPOTS).length, 18);
+  assert.equal(Object.keys(FORECAST_SPOTS).length, 35);
+  assert.equal(result.spot, 'hukou');
+  assert.equal(result.days.length, 3);
+  assert.equal(typeof result.quality, 'number');
+  assert.equal(typeof result.probability, 'number');
+  assert.equal(result.blueHour.available, true);
+  assert.equal(result.sourceStatus.qweather, 'not-configured');
+  assert.equal(requests, 2);
 });
 
 test('Worker 路由返回北京站预测', async () => {

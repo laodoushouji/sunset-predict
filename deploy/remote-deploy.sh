@@ -18,14 +18,14 @@ service_backup="$backup_root/sunset-predict.service.pre-v2-$deploy_stamp"
 history_root=/var/lib/sunset-predict/history
 feedback_root=/var/lib/sunset-predict/feedback
 cache_root=/var/lib/sunset-predict/cache
-regional_slugs="beijing erhai chongqing xiamen qingdao chengdu shenzhen huangshan guangzhou wuhan sanya xian nanjing xiapu wuxi hongkong dunhuang"
+forecast_slugs="beijing erhai chongqing xiamen qingdao chengdu shenzhen huangshan guangzhou wuhan sanya xian nanjing xiapu wuxi hongkong dunhuang caoyuan-tianlu hukou longmen haerbin-song wusongdao yalu hengshan lushan fanjing namtso heimahe ejina xiangbishan helanshan kanas taipei tianjin-wudadao coloane"
 
 if systemctl is-active --quiet sunset-predict.service; then
   previous_service_active=1
 fi
 
 rollback() {
-  rollback_code=$?
+  rollback_code=${1:-1}
   trap - ERR
   set +e
   echo "ROLLBACK_START code=$rollback_code"
@@ -57,7 +57,7 @@ rollback() {
   exit "$rollback_code"
 }
 
-trap 'echo "DEPLOY_FAILED at line $LINENO: $BASH_COMMAND (exit $?)"; rollback' ERR
+trap 'rollback_code=$?; echo "DEPLOY_FAILED at line $LINENO: $BASH_COMMAND (exit $rollback_code)"; rollback "$rollback_code"' ERR
 
 test -f "$archive_file"
 test -f "$env_staging"
@@ -71,13 +71,13 @@ fi
 
 mkdir -p "$release_dir"
 tar -xzf "$archive_file" -C "$release_dir"
+# 增量发布可以不重复上传未变更的图片；新包中已存在的同名文件优先保留。
+if [ -n "$previous_release" ] && [ -d "$previous_release/frontend/assets" ]; then
+  mkdir -p "$release_dir/frontend/assets"
+  cp -an "$previous_release/frontend/assets/." "$release_dir/frontend/assets/"
+fi
 mv "$env_staging" "$release_dir/.env"
 chmod 600 "$release_dir/.env"
-
-# 重新生成 sitemap.xml，写入当天 lastmod，给 Google 准确的新鲜度信号（避免陈旧 lastmod 拖慢收录）。
-# gen-sitemap 仅依赖纯 JS 的 worker 服务模块（cities/seo），无需原生依赖/node_modules。
-( cd "$release_dir" && "$node_bin" scripts/gen-sitemap.cjs ) \
-  || { echo "gen-sitemap 失败，中止部署" >&2; rollback; }
 
 install -d -m 750 "$history_root"
 install -d -m 750 "$feedback_root"
@@ -87,11 +87,25 @@ install -d -m 750 "$cache_root"
 # 显式重建原生模块（better-sqlite3 / sharp）：ci 用 --ignore-scripts 跳过全量脚本，这里只构建这两个需要的
 "$npm_bin" rebuild --prefix "$release_dir" better-sqlite3 sharp
 
+# 重新生成 sitemap.xml，写入当天 lastmod，给 Google 准确的新鲜度信号（避免陈旧 lastmod 拖慢收录）。
+# 必须在 npm ci/rebuild 之后：gen-sitemap 经 cities.js→blue-hour.js 依赖 suncalc（生产依赖）。
+( cd "$release_dir" && "$node_bin" scripts/gen-sitemap.cjs ) \
+  || { echo "gen-sitemap 失败，中止部署" >&2; rollback; }
+
 # SQLite 预热：校验原生模块可加载并建表；失败则回滚，避免上线后崩溃
 ( cd "$release_dir" && \
   FEEDBACK_ROOT="$feedback_root" ADVERTISERS_DB="$(dirname "$feedback_root")/advertisers.db" \
   "$node_bin" -e "require('./worker/src/services/feedback').getFeedbackStats(process.env.FEEDBACK_ROOT); require('./worker/src/services/advertisers').getAdvertiserConfig(); console.log('sqlite warmup ok')" ) \
   || { echo "SQLite 预热失败（原生模块或建表异常），中止部署" >&2; rollback; }
+
+# 反馈数据兜底迁移：把旧版按日期目录存放的 JSON 留言一次性灌入 feedback.db（幂等，
+# 已存在的记录 ON CONFLICT 不重复插入，空库不报错）。确保即便漏跑过迁移，留言在部署后仍不丢失。
+# 非致命：迁移异常仅告警，不阻断发布。
+( cd "$release_dir" && \
+  FEEDBACK_ROOT="$feedback_root" \
+  "$node_bin" scripts/migrate-feedback-to-sqlite.cjs "$feedback_root" ) \
+  && echo "feedback 迁移 ok" \
+  || echo "WARNING: feedback 迁移未执行或出错（不影响发布，留言可能沿用旧存储）" >&2
 
 "$node_bin" --check "$release_dir/worker/src/server.mjs"
 "$node_bin" --check "$release_dir/worker/src/services/prediction.js"
@@ -140,19 +154,39 @@ grep -Fq 'Sitemap: https://sunsetpredict.cloud/sitemap.xml' /tmp/sunset-v2-robot
 grep -Fq '<loc>https://sunsetpredict.cloud/</loc>' /tmp/sunset-v2-sitemap.xml
 grep -Fq '<loc>https://sunsetpredict.cloud/spots/xihu</loc>' /tmp/sunset-v2-sitemap.xml
 grep -Fq '<loc>https://sunsetpredict.cloud/spots/hongkong</loc>' /tmp/sunset-v2-sitemap.xml
-test "$(grep -c '<loc>' /tmp/sunset-v2-sitemap.xml)" -eq 20
+test "$(grep -c '<loc>' /tmp/sunset-v2-sitemap.xml)" -eq 38
 curl -fsS http://127.0.0.1:3003/spots/xihu -o /tmp/sunset-v2-xihu-page.html
 grep -Fq '<link rel="canonical" href="https://sunsetpredict.cloud/spots/xihu">' /tmp/sunset-v2-xihu-page.html
 grep -Fq '杭州西湖晚霞预测与摄影指南' /tmp/sunset-v2-xihu-page.html
+# 新增省份站点健康检查：必须具备与既有站点一致的预测详情与独立图片
+curl -fsS http://127.0.0.1:3003/spots/hukou -o /tmp/sunset-v2-hukou-page.html
+grep -Fq '吉县壶口瀑布晚霞预测与摄影指南' /tmp/sunset-v2-hukou-page.html
+grep -Fq '吉县壶口瀑布今日晚霞概率' /tmp/sunset-v2-hukou-page.html
+curl -fsS http://127.0.0.1:3003/ -o /tmp/sunset-v2-home.html
+test "$(grep -o 'id="city-' /tmp/sunset-v2-home.html | wc -l)" -eq 35
+if grep -q 'city-card--guide' /tmp/sunset-v2-home.html; then
+  echo "Guide-only province cards still present" >&2
+  exit 1
+fi
+if grep -q 'class="province-card"' /tmp/sunset-v2-home.html; then
+  echo "Legacy compact province cards still present" >&2
+  exit 1
+fi
+curl -fsS http://127.0.0.1:3003/assets/city-hukou.webp -o /tmp/sunset-v2-city-hukou.webp
+test "$(wc -c < /tmp/sunset-v2-city-hukou.webp)" -lt 200000
 curl -fsS http://127.0.0.1:3003/css/styles.css >/dev/null
 curl -fsS http://127.0.0.1:3003/js/app.js >/dev/null
+# 自托管字体上线校验：/assets/fonts/*.woff2 与 /css/fonts.css 必须可访问，否则前端回退系统字体（生僻字缺字/问号）
+curl -fsS http://127.0.0.1:3003/assets/fonts/noto-serif-sc-600.woff2 -o /dev/null
+curl -fsS http://127.0.0.1:3003/assets/fonts/noto-sans-sc-400.woff2 -o /dev/null
+curl -fsS http://127.0.0.1:3003/css/fonts.css -o /dev/null
 curl -fsS http://127.0.0.1:3003/assets/xihu-sunset.webp -o /tmp/sunset-v2-xihu-image.webp
 curl -fsS http://127.0.0.1:3003/assets/waitan-sunset.webp -o /tmp/sunset-v2-waitan-image.webp
 test "$(sha256sum /tmp/sunset-v2-xihu-image.webp | awk '{print $1}')" = "cc55ec6e2e0b155c781a8e6e8ff62538cb35b79364adbe68d8089cf8442977c7"
 test "$(sha256sum /tmp/sunset-v2-waitan-image.webp | awk '{print $1}')" = "f51150c5a0a9fe5fa51cee565c2e049d2334c9c984cdba075630dbf9c378c9ae"
 test "$(wc -c < /tmp/sunset-v2-xihu-image.webp)" -lt 200000
 test "$(wc -c < /tmp/sunset-v2-waitan-image.webp)" -lt 200000
-for slug in $regional_slugs; do
+for slug in $forecast_slugs; do
   curl -fsS "http://127.0.0.1:3003/assets/city-$slug.webp" -o "/tmp/sunset-v2-city-$slug.webp"
   test "$(wc -c < "/tmp/sunset-v2-city-$slug.webp")" -lt 200000
 done
@@ -173,22 +207,22 @@ test "$(sha256sum /tmp/sunset-v2-business-check.jpg | awk '{print $1}')" = "d360
 # 说明: 天气主源(qweather/open-meteo)与各 sourceStatus 由 worker 动态选择, 冷启动时若外部 API
 # 瞬时抖动会被标为 unavailable 或回退主源, 不能据此阻断部署(否则误杀). 仅校验结构/类型,
 # 外部连通性由 worker 自身优雅降级, 不属于部署阻断条件.
-curl -fsS http://127.0.0.1:3003/sunset | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy'].includes(v);const m=j.metrics;const b=j.blueHour;if(j.spot!=='xihu'||typeof j.rawQuality!=='number'||j.rawQuality!==j.quality||typeof j.probability!=='number'||typeof j.verdict!=='string'||j.modelVersion!=='quality-v3.1'||j.source!=='xihu-model-v3'||j.timeOffsetMinutes!==-15||!okStatus(j.sourceStatus?.waqi)||j.days?.length!==3||j.days.some(d=>typeof d.rawQuality!=='number'||typeof d.probability!=='number'||d.blueHour?.source!=='suncalc-2.0.1')||b?.source!=='suncalc-2.0.1'||typeof b.score!=='number'||!/^\d{2}:\d{2}$/.test(b.start)||!/^\d{2}:\d{2}$/.test(b.end)||![m?.cloudLow,m?.cloudMid,m?.cloudHigh,m?.visibilityKm,m?.windowTransparency].every(Number.isFinite))process.exit(1)})"
-curl -fsS http://127.0.0.1:3003/sunset | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy'].includes(v);const m=j.metrics;if(!okStatus(j.sourceStatus?.precipitation)||![m?.precipitationMm,m?.precipitationRateMmH,m?.precipitationProbability,m?.weatherCode].every(Number.isFinite))process.exit(1)})"
-curl -fsS http://127.0.0.1:3003/sunset | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy'].includes(v);if(!okStatus(j.sourceStatus?.qweather)||typeof j.weather?.source!=='string'||typeof j.weather?.label!=='string'||typeof j.weather?.kind!=='string'||(j.weather.blocksSunset&&(j.quality!==0||j.probability!==0)))process.exit(1)})"
-curl -fsS http://127.0.0.1:3003/api/spot/waitan | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy'].includes(v);const m=j.metrics;const b=j.blueHour;if(j.spot!=='waitan'||typeof j.rawQuality!=='number'||j.rawQuality!==j.quality||typeof j.probability!=='number'||typeof j.verdict!=='string'||j.modelVersion!=='quality-v3.1'||j.source!=='waitan-model-v4'||!okStatus(j.sourceStatus?.waqi)||!okStatus(j.sourceStatus?.precipitation)||b?.source!=='suncalc-2.0.1'||typeof b.score!=='number'||typeof j.weather?.label!=='string'||![m?.cloudLow,m?.cloudMid,m?.cloudHigh,m?.visibilityKm,m?.windowTransparency,m?.precipitationRateMmH,m?.precipitationProbability,m?.weatherCode].every(Number.isFinite)||(j.weather.blocksSunset&&(j.quality!==0||j.probability!==0)))process.exit(1)})"
+curl -fsS http://127.0.0.1:3003/sunset | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy','not-configured'].includes(v);const m=j.metrics;const b=j.blueHour;if(j.spot!=='xihu'||typeof j.rawQuality!=='number'||j.rawQuality!==j.quality||typeof j.probability!=='number'||typeof j.verdict!=='string'||j.modelVersion!=='quality-v3.1'||j.source!=='xihu-model-v3'||j.timeOffsetMinutes!==-15||!okStatus(j.sourceStatus?.waqi)||j.days?.length!==3||j.days.some(d=>typeof d.rawQuality!=='number'||typeof d.probability!=='number'||d.blueHour?.source!=='suncalc-2.0.1')||b?.source!=='suncalc-2.0.1'||typeof b.score!=='number'||!/^\d{2}:\d{2}$/.test(b.start)||!/^\d{2}:\d{2}$/.test(b.end)||![m?.cloudLow,m?.cloudMid,m?.cloudHigh,m?.visibilityKm,m?.windowTransparency].every(Number.isFinite))process.exit(1)})"
+curl -fsS http://127.0.0.1:3003/sunset | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy','not-configured'].includes(v);const m=j.metrics;if(!okStatus(j.sourceStatus?.precipitation)||![m?.precipitationMm,m?.precipitationRateMmH,m?.precipitationProbability,m?.weatherCode].every(Number.isFinite))process.exit(1)})"
+curl -fsS http://127.0.0.1:3003/sunset | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy','not-configured'].includes(v);if(!okStatus(j.sourceStatus?.qweather)||typeof j.weather?.source!=='string'||typeof j.weather?.label!=='string'||typeof j.weather?.kind!=='string'||(j.weather.blocksSunset&&(j.quality!==0||j.probability!==0)))process.exit(1)})"
+curl -fsS http://127.0.0.1:3003/api/spot/waitan | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy','not-configured'].includes(v);const m=j.metrics;const b=j.blueHour;if(j.spot!=='waitan'||typeof j.rawQuality!=='number'||j.rawQuality!==j.quality||typeof j.probability!=='number'||typeof j.verdict!=='string'||j.modelVersion!=='quality-v3.1'||j.source!=='waitan-model-v4'||!okStatus(j.sourceStatus?.waqi)||!okStatus(j.sourceStatus?.precipitation)||b?.source!=='suncalc-2.0.1'||typeof b.score!=='number'||typeof j.weather?.label!=='string'||![m?.cloudLow,m?.cloudMid,m?.cloudHigh,m?.visibilityKm,m?.windowTransparency,m?.precipitationRateMmH,m?.precipitationProbability,m?.weatherCode].every(Number.isFinite)||(j.weather.blocksSunset&&(j.quality!==0||j.probability!==0)))process.exit(1)})"
 curl -fsS http://127.0.0.1:3003/api/timeline -o /tmp/sunset-v2-timeline.json
-"$node_bin" -e "const j=require('/tmp/sunset-v2-timeline.json');const today=j.days?.find(d=>d.offset===0);if(!/^\d{4}-\d{2}-\d{2}$/.test(j.today)||j.days?.length<3||today?.xihu?.spot!=='xihu'||today?.waitan?.spot!=='waitan'||today?.spots?.length!==17||today.xihu.modelVersion!=='quality-v3.1'||typeof today.xihu.rawQuality!=='number')process.exit(1)"
-"$node_bin" -e "const j=require('/tmp/sunset-v2-timeline.json');const d=j.days.find(x=>x.offset===0);const items=[d.xihu,d.waitan,...d.spots];if(items.length!==19||items.some((x,i)=>!x.sunsetWindow||!Array.isArray(x.sunsetWindow.timeline)||x.sunsetWindow.timeline.length>6||(x.sunsetWindow.available&&(!x.sunsetWindow.timeline?.some(n=>n.time===x.sunsetWindow.peakTime)||x.sunsetWindow.timeline.filter(n=>Number.isFinite(n.quality)).length<3))||x.sunsetWindow.timeline?.some(n=>n.resolution!==(i===0?'native-15m':'interpolated-from-hourly'))))process.exit(1)"
+"$node_bin" -e "const j=require('/tmp/sunset-v2-timeline.json');const today=j.days?.find(d=>d.offset===0);if(!/^\d{4}-\d{2}-\d{2}$/.test(j.today)||j.days?.length<3||today?.xihu?.spot!=='xihu'||today?.waitan?.spot!=='waitan'||today?.spots?.length!==35||today.xihu.modelVersion!=='quality-v3.1'||typeof today.xihu.rawQuality!=='number')process.exit(1)"
+"$node_bin" -e "const j=require('/tmp/sunset-v2-timeline.json');const d=j.days.find(x=>x.offset===0);const items=[d.xihu,d.waitan,...d.spots];if(items.length!==37||items.some((x,i)=>!x.sunsetWindow||!Array.isArray(x.sunsetWindow.timeline)||x.sunsetWindow.timeline.length>6||(x.sunsetWindow.available&&(!x.sunsetWindow.timeline?.some(n=>n.time===x.sunsetWindow.peakTime)||x.sunsetWindow.timeline.filter(n=>Number.isFinite(n.quality)).length<3))||x.sunsetWindow.timeline?.some(n=>n.resolution!==(i===0?'native-15m':'interpolated-from-hourly'))))process.exit(1)"
 timeline_today=$("$node_bin" -p "require('/tmp/sunset-v2-timeline.json').today")
 test -s "$history_root/$timeline_today.json"
 "$node_bin" -e "const j=require(process.argv[1]);if(j.schemaVersion!==2||j.modelVersion!=='quality-v3.1'||j.calibration?.xihu?.outputs?.rawQuality!==j.xihu.rawQuality||!j.calibration?.xihu?.inputs?.model||!Array.isArray(j.calibration?.xihu?.adjustments))process.exit(1)" "$history_root/$timeline_today.json"
 curl -fsS http://127.0.0.1:3003/api/spots -o /tmp/sunset-v2-regional-spots.json
-"$node_bin" -e "const j=require('/tmp/sunset-v2-regional-spots.json');const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy'].includes(v);if(j.spots?.length!==17||j.spots.some(s=>typeof s.spot!=='string'||(typeof s.quality==='number'?(!Number.isFinite(s.rawQuality)||s.rawQuality!==s.quality||!Number.isFinite(s.probability)||typeof s.verdict!=='string'||s.modelVersion!=='quality-v3.1'||!s.source?.endsWith('-model-v3')||!['NONE','CLEAR','FAIR','GREAT','FIRE'].includes(s.grade)||!okStatus(s.sourceStatus?.precipitation)||!okStatus(s.sourceStatus?.qweather)||typeof s.weather?.source!=='string'||typeof s.weather?.label!=='string'||![s.metrics?.cloudLow,s.metrics?.cloudMid,s.metrics?.cloudHigh,s.metrics?.visibilityKm,s.metrics?.windowTransparency,s.metrics?.precipitationRateMmH,s.metrics?.precipitationProbability,s.metrics?.weatherCode].every(Number.isFinite)||(s.weather.blocksSunset&&(s.quality!==0||s.probability!==0))):typeof s.error!=='string')))process.exit(1)"
+"$node_bin" -e "const j=require('/tmp/sunset-v2-regional-spots.json');const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy','not-configured'].includes(v);if(j.spots?.length!==35||j.spots.some(s=>typeof s.spot!=='string'||(typeof s.quality==='number'?(!Number.isFinite(s.rawQuality)||s.rawQuality!==s.quality||!Number.isFinite(s.probability)||typeof s.verdict!=='string'||s.modelVersion!=='quality-v3.1'||!s.source?.endsWith('-model-v3')||!['NONE','CLEAR','FAIR','GREAT','FIRE'].includes(s.grade)||!okStatus(s.sourceStatus?.precipitation)||!okStatus(s.sourceStatus?.qweather)||typeof s.weather?.source!=='string'||typeof s.weather?.label!=='string'||![s.metrics?.cloudLow,s.metrics?.cloudMid,s.metrics?.cloudHigh,s.metrics?.visibilityKm,s.metrics?.windowTransparency,s.metrics?.precipitationRateMmH,s.metrics?.precipitationProbability,s.metrics?.weatherCode].every(Number.isFinite)||(s.weather.blocksSunset&&(s.quality!==0||s.probability!==0))):typeof s.error!=='string')))process.exit(1)"
 "$node_bin" -e "const j=require('/tmp/sunset-v2-regional-spots.json');if(j.spots?.some(s=>!s.error&&(!s.blueHour?.available||!/^\\d{2}:\\d{2}$/.test(s.blueHour.start)||!/^\\d{2}:\\d{2}$/.test(s.blueHour.end))))process.exit(1)"
 curl -fsS -H 'X-Real-IP: 223.5.5.5' http://127.0.0.1:3003/api/nearby -o /tmp/sunset-v2-nearby.json
 "$node_bin" -e "const j=require('/tmp/sunset-v2-nearby.json');if(j.available!==true||j.accuracy!=='city'||j.nearestSpot?.spot!=='xihu'||!Number.isFinite(j.nearestSpot?.distanceKm)||j.ip!==undefined)process.exit(1)"
-for slug in $regional_slugs; do
+for slug in $forecast_slugs; do
   status=$(curl -sS -o "/tmp/sunset-v2-$slug.json" -w '%{http_code}' "http://127.0.0.1:3003/api/spot/$slug")
   "$node_bin" -e "const j=JSON.parse(require('fs').readFileSync('/tmp/sunset-v2-'+process.argv[1]+'.json'));const status=process.argv[2];if(status==='200'?(j.spot!==process.argv[1]||typeof j.rawQuality!=='number'||j.rawQuality!==j.quality||typeof j.probability!=='number'||typeof j.verdict!=='string'||j.modelVersion!=='quality-v3.1'||!j.source?.endsWith('-model-v3')||j.forecast?.length!==3||![j.metrics?.cloudLow,j.metrics?.cloudMid,j.metrics?.cloudHigh,j.metrics?.visibilityKm,j.metrics?.windowTransparency].every(Number.isFinite)):(status!=='502'||j.error!=='Prediction service unavailable'))process.exit(1)" "$slug" "$status"
 done
@@ -210,19 +244,26 @@ curl -fsS --compressed -D /tmp/sunset-v2-public-timeline-gzip.txt -o /dev/null h
 grep -Eiq '^content-encoding: gzip' /tmp/sunset-v2-public-index-gzip.txt
 grep -Eiq '^content-encoding: gzip' /tmp/sunset-v2-public-timeline-gzip.txt
 grep -Fq '<title>晚霞预测 - 今日火烧云概率与摄影指南 | Sunset Predict</title>' /tmp/sunset-v2-public-index.html
-grep -Fq '<meta name="description" content="专业提供全国 19 城（杭州西湖、上海外滩、北京故宫、香港维港、敦煌鸣沙山等）晚霞、火烧云精准预测。结合 250hPa 高空湿度与格点气象算法，为摄影师提供机位建议与参数指导。">' /tmp/sunset-v2-public-index.html
+grep -Fq '<meta name="description" content="专业提供全国 37 个热门摄影地点（杭州西湖、上海外滩、北京故宫、香港维港、敦煌鸣沙山等）晚霞、火烧云预测。结合 250hPa 高空湿度与格点气象算法，为摄影师提供机位建议与参数指导。">' /tmp/sunset-v2-public-index.html
 grep -Fq '<link rel="canonical" href="https://sunsetpredict.cloud/">' /tmp/sunset-v2-public-index.html
 grep -Fq '<meta property="og:image" content="https://sunsetpredict.cloud/assets/xihu-sunset.webp">' /tmp/sunset-v2-public-index.html
 grep -Fq 'id="seo-structured-data" type="application/ld+json"' /tmp/sunset-v2-public-index.html
-test "$(grep -o 'class=\"city-card city-card--' /tmp/sunset-v2-public-index.html | wc -l)" -eq 17
+test "$(grep -o 'id=\"city-' /tmp/sunset-v2-public-index.html | wc -l)" -eq 35
+if grep -q 'city-card--guide' /tmp/sunset-v2-public-index.html; then
+  echo "Guide-only province cards still present on public homepage" >&2
+  exit 1
+fi
 grep -q "西湖" /tmp/sunset-v2-public-index.html
 grep -q "上海外滩" /tmp/sunset-v2-public-index.html
 grep -q "全国摄影站" /tmp/sunset-v2-public-index.html
 grep -q "detail-overlay" /tmp/sunset-v2-public-index.html
 grep -q "物理层拆解" /tmp/sunset-v2-public-index.html
 grep -q "作者碎碎念" /tmp/sunset-v2-public-index.html
-grep -q "css/styles.css?v=20260726-nanjing-v44" /tmp/sunset-v2-public-index.html
-grep -q "js/app.js?v=20260808-card-route-v52" /tmp/sunset-v2-public-index.html
+grep -q "css/styles.css?v=20260811-spot-search-v59" /tmp/sunset-v2-public-index.html
+grep -q "js/app.js?v=20260811-spot-search-v59" /tmp/sunset-v2-public-index.html
+grep -q 'id="spot-search-toggle"' /tmp/sunset-v2-public-index.html
+grep -q 'id="spot-search-input"' /tmp/sunset-v2-public-index.html
+grep -q 'id="spot-search-empty"' /tmp/sunset-v2-public-index.html
 grep -q '<script async src="https://unpkg.com/lucide@1.25.0/dist/umd/lucide.min.js"></script>' /tmp/sunset-v2-public-index.html
 grep -Eq 'id="forecast-bootstrap" type="application/json">\{"today":"[0-9]{4}-[0-9]{2}-[0-9]{2}"' /tmp/sunset-v2-public-index.html
 if grep -q 'cdn.tailwindcss.com' /tmp/sunset-v2-public-index.html; then
@@ -311,7 +352,7 @@ grep -Fq 'Sitemap: https://sunsetpredict.cloud/sitemap.xml' /tmp/sunset-v2-publi
 grep -Fq '<loc>https://sunsetpredict.cloud/</loc>' /tmp/sunset-v2-public-sitemap.xml
 grep -Fq '<loc>https://sunsetpredict.cloud/spots/xihu</loc>' /tmp/sunset-v2-public-sitemap.xml
 grep -Fq '<loc>https://sunsetpredict.cloud/spots/hongkong</loc>' /tmp/sunset-v2-public-sitemap.xml
-test "$(grep -c '<loc>' /tmp/sunset-v2-public-sitemap.xml)" -eq 20
+test "$(grep -c '<loc>' /tmp/sunset-v2-public-sitemap.xml)" -eq 38
 
 # --- P1: 站长平台验证标签断言 ---
 # 仅当部署 env 配置了验证 token 时才校验线上页面是否出现对应 <meta>；
@@ -354,6 +395,7 @@ grep -q ".spot-messages__list" /tmp/sunset-v2-public-styles.css
 grep -q ".spot-message__image" /tmp/sunset-v2-public-styles.css
 grep -q ".blue-hour__card" /tmp/sunset-v2-public-styles.css
 grep -q "body.blue-hour-active" /tmp/sunset-v2-public-styles.css
+grep -q ".spot-search.is-open .spot-search__field" /tmp/sunset-v2-public-styles.css
 curl -fsS https://sunsetpredict.cloud/js/app.js -o /tmp/sunset-v2-public-app.js
 grep -q 'alt="${spot.name}标志性晚霞摄影景观"' /tmp/sunset-v2-public-app.js
 grep -q 'image.alt = data?.imageAlt' /tmp/sunset-v2-public-app.js
@@ -384,6 +426,8 @@ if grep -Eq 'verdict-eyebrow|verdict-text' /tmp/sunset-v2-public-app.js; then
 fi
 grep -q "function renderProbability" /tmp/sunset-v2-public-app.js
 grep -q "city-card__image" /tmp/sunset-v2-public-app.js
+grep -q "function filterSpotCards(query)" /tmp/sunset-v2-public-app.js
+grep -q "function bindSpotSearch()" /tmp/sunset-v2-public-app.js
 grep -q "function renderWeatherBadge" /tmp/sunset-v2-public-app.js
 grep -q "function renderWeatherDetails" /tmp/sunset-v2-public-app.js
 grep -q "function renderBlueHour" /tmp/sunset-v2-public-app.js
@@ -418,7 +462,7 @@ curl -fsS https://sunsetpredict.cloud/assets/xihu-sunset.webp -o /tmp/sunset-v2-
 curl -fsS https://sunsetpredict.cloud/assets/waitan-sunset.webp -o /tmp/sunset-v2-public-waitan-image.webp
 test "$(sha256sum /tmp/sunset-v2-public-xihu-image.webp | awk '{print $1}')" = "cc55ec6e2e0b155c781a8e6e8ff62538cb35b79364adbe68d8089cf8442977c7"
 test "$(sha256sum /tmp/sunset-v2-public-waitan-image.webp | awk '{print $1}')" = "f51150c5a0a9fe5fa51cee565c2e049d2334c9c984cdba075630dbf9c378c9ae"
-for slug in $regional_slugs; do
+for slug in $forecast_slugs; do
   curl -fsS "https://sunsetpredict.cloud/assets/city-$slug.webp" -o "/tmp/sunset-v2-public-city-$slug.webp"
   test "$(wc -c < "/tmp/sunset-v2-public-city-$slug.webp")" -lt 200000
 done
@@ -432,18 +476,18 @@ test "$(sha256sum /tmp/sunset-v2-public-city-nanjing.webp | awk '{print $1}')" =
 test "$(sha256sum /tmp/sunset-v2-public-city-xiapu.webp | awk '{print $1}')" = "386f81249efe0ae950b4d0e5379361eb2a6d8a943cb4b760a399aac57890faa8"
 test "$(sha256sum /tmp/sunset-v2-public-city-wuxi.webp | awk '{print $1}')" = "0d7ea145d82ac19ea4b3e4fb1e8cae0d4e6a574b6cca8b338d0eb7a0476aa148"
 
-curl -fsS https://sunsetpredict.cloud/sunset | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy'].includes(v);const m=j.metrics;const b=j.blueHour;if(j.spot!=='xihu'||typeof j.rawQuality!=='number'||j.rawQuality!==j.quality||typeof j.probability!=='number'||typeof j.verdict!=='string'||j.modelVersion!=='quality-v3.1'||j.source!=='xihu-model-v3'||j.timeOffsetMinutes!==-15||!okStatus(j.sourceStatus?.waqi)||j.days?.length!==3||j.days.some(d=>typeof d.rawQuality!=='number'||typeof d.probability!=='number'||d.blueHour?.source!=='suncalc-2.0.1')||b?.source!=='suncalc-2.0.1'||typeof b.score!=='number'||!/^\d{2}:\d{2}$/.test(b.start)||!/^\d{2}:\d{2}$/.test(b.end)||![m?.cloudLow,m?.cloudMid,m?.cloudHigh,m?.visibilityKm,m?.windowTransparency].every(Number.isFinite))process.exit(1)})"
-curl -fsS https://sunsetpredict.cloud/sunset | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy'].includes(v);const m=j.metrics;if(!okStatus(j.sourceStatus?.precipitation)||![m?.precipitationMm,m?.precipitationRateMmH,m?.precipitationProbability,m?.weatherCode].every(Number.isFinite))process.exit(1)})"
-curl -fsS https://sunsetpredict.cloud/sunset | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy'].includes(v);if(!okStatus(j.sourceStatus?.qweather)||typeof j.weather?.source!=='string'||typeof j.weather?.label!=='string'||typeof j.weather?.kind!=='string'||(j.weather.blocksSunset&&(j.quality!==0||j.probability!==0)))process.exit(1)})"
+curl -fsS https://sunsetpredict.cloud/sunset | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy','not-configured'].includes(v);const m=j.metrics;const b=j.blueHour;if(j.spot!=='xihu'||typeof j.rawQuality!=='number'||j.rawQuality!==j.quality||typeof j.probability!=='number'||typeof j.verdict!=='string'||j.modelVersion!=='quality-v3.1'||j.source!=='xihu-model-v3'||j.timeOffsetMinutes!==-15||!okStatus(j.sourceStatus?.waqi)||j.days?.length!==3||j.days.some(d=>typeof d.rawQuality!=='number'||typeof d.probability!=='number'||d.blueHour?.source!=='suncalc-2.0.1')||b?.source!=='suncalc-2.0.1'||typeof b.score!=='number'||!/^\d{2}:\d{2}$/.test(b.start)||!/^\d{2}:\d{2}$/.test(b.end)||![m?.cloudLow,m?.cloudMid,m?.cloudHigh,m?.visibilityKm,m?.windowTransparency].every(Number.isFinite))process.exit(1)})"
+curl -fsS https://sunsetpredict.cloud/sunset | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy','not-configured'].includes(v);const m=j.metrics;if(!okStatus(j.sourceStatus?.precipitation)||![m?.precipitationMm,m?.precipitationRateMmH,m?.precipitationProbability,m?.weatherCode].every(Number.isFinite))process.exit(1)})"
+curl -fsS https://sunsetpredict.cloud/sunset | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy','not-configured'].includes(v);if(!okStatus(j.sourceStatus?.qweather)||typeof j.weather?.source!=='string'||typeof j.weather?.label!=='string'||typeof j.weather?.kind!=='string'||(j.weather.blocksSunset&&(j.quality!==0||j.probability!==0)))process.exit(1)})"
 curl -fsS https://sunsetpredict.cloud/sunset/ | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);if(j.spot!=='xihu'||typeof j.quality!=='number')process.exit(1)})"
-curl -fsS https://sunsetpredict.cloud/api/spot/waitan | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy'].includes(v);const m=j.metrics;const b=j.blueHour;if(j.spot!=='waitan'||typeof j.rawQuality!=='number'||j.rawQuality!==j.quality||typeof j.probability!=='number'||typeof j.verdict!=='string'||j.modelVersion!=='quality-v3.1'||j.source!=='waitan-model-v4'||!okStatus(j.sourceStatus?.waqi)||!okStatus(j.sourceStatus?.precipitation)||b?.source!=='suncalc-2.0.1'||typeof b.score!=='number'||typeof j.weather?.label!=='string'||![m?.cloudLow,m?.cloudMid,m?.cloudHigh,m?.visibilityKm,m?.windowTransparency,m?.precipitationRateMmH,m?.precipitationProbability,m?.weatherCode].every(Number.isFinite)||(j.weather.blocksSunset&&(j.quality!==0||j.probability!==0)))process.exit(1)})"
+curl -fsS https://sunsetpredict.cloud/api/spot/waitan | "$node_bin" -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s);const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy','not-configured'].includes(v);const m=j.metrics;const b=j.blueHour;if(j.spot!=='waitan'||typeof j.rawQuality!=='number'||j.rawQuality!==j.quality||typeof j.probability!=='number'||typeof j.verdict!=='string'||j.modelVersion!=='quality-v3.1'||j.source!=='waitan-model-v4'||!okStatus(j.sourceStatus?.waqi)||!okStatus(j.sourceStatus?.precipitation)||b?.source!=='suncalc-2.0.1'||typeof b.score!=='number'||typeof j.weather?.label!=='string'||![m?.cloudLow,m?.cloudMid,m?.cloudHigh,m?.visibilityKm,m?.windowTransparency,m?.precipitationRateMmH,m?.precipitationProbability,m?.weatherCode].every(Number.isFinite)||(j.weather.blocksSunset&&(j.quality!==0||j.probability!==0)))process.exit(1)})"
 curl -fsS https://sunsetpredict.cloud/api/timeline -o /tmp/sunset-v2-public-timeline.json
-"$node_bin" -e "const j=require('/tmp/sunset-v2-public-timeline.json');if(j.days?.length<3||j.days.find(d=>d.offset===0)?.spots?.length!==17)process.exit(1)"
+"$node_bin" -e "const j=require('/tmp/sunset-v2-public-timeline.json');if(j.days?.length<3||j.days.find(d=>d.offset===0)?.spots?.length!==35)process.exit(1)"
 "$node_bin" -e "const j=require('/tmp/sunset-v2-public-timeline.json');const d=j.days.find(x=>x.offset===0);const items=[d.xihu,d.waitan,...d.spots];if(items.some(x=>!x.sunsetWindow||!Array.isArray(x.sunsetWindow.timeline)||x.sunsetWindow.timeline.length>6))process.exit(1)"
 curl -fsS https://sunsetpredict.cloud/api/spots -o /tmp/sunset-v2-public-regional-spots.json
-"$node_bin" -e "const j=require('/tmp/sunset-v2-public-regional-spots.json');const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy'].includes(v);if(j.spots?.length!==17||j.spots.some(s=>typeof s.spot!=='string'||(typeof s.quality==='number'?(!Number.isFinite(s.rawQuality)||s.rawQuality!==s.quality||!Number.isFinite(s.probability)||typeof s.verdict!=='string'||s.modelVersion!=='quality-v3.1'||!s.source?.endsWith('-model-v3')||!['NONE','CLEAR','FAIR','GREAT','FIRE'].includes(s.grade)||!okStatus(s.sourceStatus?.precipitation)||!okStatus(s.sourceStatus?.qweather)||typeof s.weather?.source!=='string'||typeof s.weather?.label!=='string'||![s.metrics?.cloudLow,s.metrics?.cloudMid,s.metrics?.cloudHigh,s.metrics?.visibilityKm,s.metrics?.windowTransparency,s.metrics?.precipitationRateMmH,s.metrics?.precipitationProbability,s.metrics?.weatherCode].every(Number.isFinite)||(s.weather.blocksSunset&&(s.quality!==0||s.probability!==0))):typeof s.error!=='string')))process.exit(1)"
+"$node_bin" -e "const j=require('/tmp/sunset-v2-public-regional-spots.json');const okStatus=v=>v===undefined||['connected','available','unavailable','degraded','pressure-level-proxy','not-configured'].includes(v);if(j.spots?.length!==35||j.spots.some(s=>typeof s.spot!=='string'||(typeof s.quality==='number'?(!Number.isFinite(s.rawQuality)||s.rawQuality!==s.quality||!Number.isFinite(s.probability)||typeof s.verdict!=='string'||s.modelVersion!=='quality-v3.1'||!s.source?.endsWith('-model-v3')||!['NONE','CLEAR','FAIR','GREAT','FIRE'].includes(s.grade)||!okStatus(s.sourceStatus?.precipitation)||!okStatus(s.sourceStatus?.qweather)||typeof s.weather?.source!=='string'||typeof s.weather?.label!=='string'||![s.metrics?.cloudLow,s.metrics?.cloudMid,s.metrics?.cloudHigh,s.metrics?.visibilityKm,s.metrics?.windowTransparency,s.metrics?.precipitationRateMmH,s.metrics?.precipitationProbability,s.metrics?.weatherCode].every(Number.isFinite)||(s.weather.blocksSunset&&(s.quality!==0||s.probability!==0))):typeof s.error!=='string')))process.exit(1)"
 "$node_bin" -e "const j=require('/tmp/sunset-v2-public-regional-spots.json');if(j.spots?.some(s=>!s.error&&(!s.blueHour?.available||!/^\\d{2}:\\d{2}$/.test(s.blueHour.start)||!/^\\d{2}:\\d{2}$/.test(s.blueHour.end))))process.exit(1)"
-for slug in $regional_slugs; do
+for slug in $forecast_slugs; do
   status=$(curl -sS -o "/tmp/sunset-v2-public-$slug.json" -w '%{http_code}' "https://sunsetpredict.cloud/api/spot/$slug")
   "$node_bin" -e "const j=JSON.parse(require('fs').readFileSync('/tmp/sunset-v2-public-'+process.argv[1]+'.json'));const status=process.argv[2];if(status==='200'?(j.spot!==process.argv[1]||typeof j.rawQuality!=='number'||j.rawQuality!==j.quality||typeof j.probability!=='number'||typeof j.verdict!=='string'||j.modelVersion!=='quality-v3.1'||!j.source?.endsWith('-model-v3')||j.forecast?.length!==3||![j.metrics?.cloudLow,j.metrics?.cloudMid,j.metrics?.cloudHigh,j.metrics?.visibilityKm,j.metrics?.windowTransparency].every(Number.isFinite)):(status!=='502'||j.error!=='Prediction service unavailable'))process.exit(1)" "$slug" "$status"
 done

@@ -10,14 +10,17 @@ const {
   normalizeIp,
 } = require('../src/services/nearby');
 
-test('附近站点包含西湖、外滩和全部全国站点', () => {
-  assert.equal(NEARBY_SPOTS.length, 19);
+test('附近站点包含西湖、外滩和全部 35 个预测站点', () => {
+  assert.equal(NEARBY_SPOTS.length, 37);
   assert.deepEqual(
     NEARBY_SPOTS.map(spot => spot.spot),
     [
       'xihu', 'waitan', 'beijing', 'erhai', 'chongqing', 'xiamen', 'qingdao',
       'chengdu', 'shenzhen', 'huangshan', 'guangzhou', 'wuhan', 'sanya',
       'xian', 'nanjing', 'xiapu', 'wuxi', 'hongkong', 'dunhuang',
+      'caoyuan-tianlu', 'hukou', 'longmen', 'haerbin-song', 'wusongdao', 'yalu',
+      'hengshan', 'lushan', 'fanjing', 'namtso', 'heimahe', 'ejina',
+      'xiangbishan', 'helanshan', 'kanas', 'taipei', 'tianjin-wudadao', 'coloane',
     ]
   );
 });

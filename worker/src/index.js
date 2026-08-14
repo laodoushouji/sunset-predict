@@ -1,5 +1,5 @@
 const { getShanghaiPrediction } = require('./services/shanghai');
-const { CITY_ALIASES, CITY_SPOTS, getAllCityPredictions, getCityPrediction } = require('./services/cities');
+const { CITY_ALIASES, FORECAST_SPOTS, getAllCityPredictions, getCityPrediction } = require('./services/cities');
 
 const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
@@ -46,7 +46,7 @@ async function handleRequest(request, env = {}) {
   }
 
   const cityMatch = url.pathname.match(/^\/api\/spot\/([a-z-]+)\/?$/);
-  if (request.method === 'GET' && cityMatch && (CITY_SPOTS[cityMatch[1]] || CITY_ALIASES[cityMatch[1]])) {
+  if (request.method === 'GET' && cityMatch && (FORECAST_SPOTS[cityMatch[1]] || CITY_ALIASES[cityMatch[1]])) {
     try {
       return json(await getCityPrediction(cityMatch[1], { fetchImpl: env.fetch || globalThis.fetch }));
     } catch (error) {

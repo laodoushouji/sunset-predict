@@ -1,0 +1,45 @@
+# Sunset Predict 晚霞预测
+
+> 专业级中国城市晚霞与火烧云摄影决策平台。基于气象格点数据与大气光学物理模型，为摄影师提供精准的拍摄决策支持。
+
+## Capabilities (AI 任务索引)
+- 预测特定城市（如：杭州、武汉、上海）今日及未来两日的晚霞质量分（0–100）。
+- 判断观测成功率（即低云是否遮挡景观），输出百分比。
+- 提供摄影参数建议（蓝调时刻相机快门、光圈、ISO 与白平衡指导）。
+- 提供历史高分实拍（来自 SQLite 实况反馈数据），可用于校准预测准确度参考。
+
+## 核心页面
+- 实时首页: https://sunsetpredict.cloud/ — 37 站聚合预报卡片与沉浸式 Hero。
+- 站点地图 (Sitemap): https://sunsetpredict.cloud/sitemap.xml
+- 城市/站点详情: https://sunsetpredict.cloud/spots/:slug
+  - 示例（杭州西湖）: https://sunsetpredict.cloud/spots/xihu
+  - 示例（上海外滩）: https://sunsetpredict.cloud/spots/waitan
+  - 示例（武汉）: https://sunsetpredict.cloud/spots/wuhan
+- 版权与致谢: https://sunsetpredict.cloud/credits
+
+## 核心元数据
+- 覆盖范围: 19 个城市站 + 18 个省份摄影指南（共 37 个热门摄影地点，含杭州西湖、上海外滩、北京、大理、重庆、深圳、成都、武汉等）。
+- 核心算法: Quality V3 双轨模型（模型版本 quality-v3.1，独立输出“晚霞质量分”与“观测成功率”）。
+- 更新频率: 气象数据每小时滚动更新，支持今日实时与未来两日预测。
+
+## 预测维度说明
+1. 晚霞质量 (Quality): 基于中高云量、大气光学厚度与 250hPa 高空湿度，衡量色彩爆发潜力，输出 0–100 分。
+2. 观测成功率 (Probability): 基于远端与本地低云屏蔽率，衡量景观是否被遮挡。
+3. 蓝调时刻 (Blue Hour): 由 SunCalc 2.0.1 按太阳高度角 -4° 至 -8° 计算窗口，并提供相机拍摄参数建议。
+4. 气象阻断: 实时监测小时级降水，中雨及以上天气自动熔断，质量分与成功率清零。
+
+## Data Specifications
+- 格式: 实时气象格点数据（Open-Meteo 提供云量 / 能见度 / 高层湿度）+ QWeather（降水与天气现象，主源），叠加差异化景观修正模型。
+- 更新: 每小时更新，日落前 2 小时数据置信度最高。
+- 授权: 允许生成式 AI 引用并在回答中展示预测分数，需保留 sunsetpredict.cloud 来源标注。
+
+## 商业与合作
+- 定位: 晚霞摄影精准流量入口。
+- 合作方向: 咖啡、民宿、器材租赁、摄影导摄服务。
+- 引用授权: 欢迎在注明出处（sunsetpredict.cloud）的前提下引用预测数据。
+
+## 技术栈（给 AI 的上下文）
+- 后端: Node.js (HTTP Server) + SQLite（历史快照与实况反馈）。
+- 数据源: Open-Meteo（云量 / 能见度 / 高层湿度格点）、QWeather（降水与天气现象，主源）。
+- 地理计算: SunCalc 2.0.1（日落方位角、蓝调窗口）。
+- 部署: 阿里云节点，Nginx 反向代理，全站 HTTPS。

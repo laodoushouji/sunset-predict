@@ -29,6 +29,7 @@ let sharePosterUrl = '';
 let detailOpenedAt = 0;
 let detailEntrySource = 'direct';
 let detailExitTracked = false;
+let detailPageScrollY = 0;
 const feedbackDraft = {
   spot: null,
   date: null,
@@ -109,10 +110,33 @@ const REGIONAL_SPOTS = [
   { slug: 'wuxi', city: '无锡 · Wuxi', name: '鼋头渚 / 太湖', hook: '太湖水面铺霞' },
 ];
 
+const PROVINCE_FORECAST_SPOTS = [
+  { slug: 'caoyuan-tianlu', city: '张家口 · Zhangjiakou', name: '草原天路', hook: '风车矩阵与高原落日' },
+  { slug: 'hukou', city: '临汾 · Linfen', name: '壶口瀑布', hook: '黄河水雾与峡谷落日' },
+  { slug: 'longmen', city: '洛阳 · Luoyang', name: '龙门石窟', hook: '石窟剪影与伊河晚霞' },
+  { slug: 'haerbin-song', city: '哈尔滨 · Harbin', name: '松花江铁路桥', hook: '老江桥与松花江落日' },
+  { slug: 'wusongdao', city: '吉林 · Jilin', name: '雾凇岛', hook: '雾凇江面与清冽落日' },
+  { slug: 'yalu', city: '丹东 · Dandong', name: '鸭绿江断桥', hook: '断桥剪影与界河落日' },
+  { slug: 'hengshan', city: '衡阳 · Hengyang', name: '衡山祝融峰', hook: '祝融峰云海与晚霞' },
+  { slug: 'lushan', city: '九江 · Jiujiang', name: '庐山含鄱口', hook: '鄱阳湖与山湖云霞' },
+  { slug: 'fanjing', city: '铜仁 · Tongren', name: '梵净山', hook: '红云金顶与武陵云海' },
+  { slug: 'namtso', city: '拉萨 · Lhasa', name: '纳木错', hook: '圣湖倒影与雪峰落日' },
+  { slug: 'heimahe', city: '青海湖 · Qinghai Lake', name: '黑马河', hook: '湖面铺霞与正面落日' },
+  { slug: 'ejina', city: '阿拉善 · Alxa', name: '额济纳胡杨林', hook: '胡杨金秋与荒漠落日' },
+  { slug: 'xiangbishan', city: '桂林 · Guilin', name: '象鼻山', hook: '象鼻山剪影与漓江晚霞' },
+  { slug: 'helanshan', city: '银川 · Yinchuan', name: '贺兰山岩画', hook: '贺兰山影与荒漠落日' },
+  { slug: 'kanas', city: '阿勒泰 · Altay', name: '喀纳斯神仙湾', hook: '神仙湾镜面与阿尔泰晚霞' },
+  { slug: 'taipei', city: '台北 · Taipei', name: '象山', hook: '城市天际线与象山蓝调' },
+  { slug: 'tianjin-wudadao', city: '天津 · Tianjin', name: '五大道', hook: '洋楼梧桐与城市晚霞' },
+  { slug: 'coloane', city: '澳门 · Macao', name: '路环黑沙', hook: '黑沙海岸与离岛落日' },
+];
+
+const ALL_REGIONAL_SPOTS = [...REGIONAL_SPOTS, ...PROVINCE_FORECAST_SPOTS];
+
 const DETAIL_SPOTS = {
   xihu: { cardId: 'card-xihu', name: '杭州西湖', nameEn: 'Xihu' },
   waitan: { cardId: 'card-bund', name: '上海外滩', nameEn: 'The Bund' },
-  ...Object.fromEntries(REGIONAL_SPOTS.map(spot => [spot.slug, {
+  ...Object.fromEntries(ALL_REGIONAL_SPOTS.map(spot => [spot.slug, {
     cardId: `city-${spot.slug}`,
     name: spot.name,
     nameEn: spot.city.split('·')[1]?.trim() || spot.slug,
@@ -252,6 +276,96 @@ const SCENIC_CAPTIONS = {
     high: '大漠燃霞 · 沙海鎏金 · 驼队剪影',
     observable: '长空落日 · 沙山余晖 · 月泉暮色',
     blocked: '沙尘蔽日 · 西方光路被风沙吞没',
+  },
+  'caoyuan-tianlu': {
+    high: '草原铺霞 · 风车染金 · 高原燃天',
+    observable: '长空落日 · 草坡渐暗 · 天际澄明',
+    blocked: '西方云墙 · 霞光止于高原',
+  },
+  hukou: {
+    high: '峡谷燃霞 · 黄河映红 · 水雾披金',
+    observable: '怒涛落日 · 峡谷暮色 · 彩虹隐现',
+    blocked: '晋陕云幕 · 峡谷霞光隐没',
+  },
+  longmen: {
+    high: '石窟披霞 · 伊河映红 · 佛龛鎏金',
+    observable: '滨水落日 · 石窟剪影 · 暮色澄明',
+    blocked: '西山云墙 · 伊河霞光难现',
+  },
+  'haerbin-song': {
+    high: '钢桥燃霞 · 松江映红 · 江面流金',
+    observable: '江上落日 · 桥架剪影 · 暮色清冷',
+    blocked: '西方云幕 · 松江霞光隐没',
+  },
+  wusongdao: {
+    high: '江面铺霞 · 雾凇映红 · 岛湾流金',
+    observable: '界江落日 · 雾凇剪影 · 暮色清冽',
+    blocked: '西方云墙 · 江湾霞光隐没',
+  },
+  yalu: {
+    high: '断桥燃霞 · 鸭江映红 · 钢架鎏金',
+    observable: '界河落日 · 断桥剪影 · 暮色清冽',
+    blocked: '西方云幕 · 界河霞光隐没',
+  },
+  hengshan: {
+    high: '峰林燃霞 · 云海浴金 · 祝融披红',
+    observable: '峰顶落日 · 长空澄澈 · 群山剪影',
+    blocked: '云雾封山 · 祝融霞光无踪',
+  },
+  lushan: {
+    high: '含鄱铺霞 · 云海流金 · 群峰映红',
+    observable: '山顶落日 · 鄱湖澄明 · 暮色温柔',
+    blocked: '云雾封山 · 含鄱霞光难现',
+  },
+  fanjing: {
+    high: '金顶燃霞 · 云海浴金 · 武陵披红',
+    observable: '峰顶落日 · 蘑菇石影 · 天际澄明',
+    blocked: '云雾封山 · 金顶霞光无踪',
+  },
+  namtso: {
+    high: '圣湖燃霞 · 雪峰映红 · 水面流金',
+    observable: '高原落日 · 湖面澄澈 · 雪山剪影',
+    blocked: '西方云墙 · 圣湖霞光隐没',
+  },
+  heimahe: {
+    high: '湖面铺霞 · 水鸟映红 · 正面流金',
+    observable: '湖上落日 · 远山剪影 · 暮色澄明',
+    blocked: '西方云幕 · 湖面霞光难现',
+  },
+  ejina: {
+    high: '胡杨燃霞 · 大漠映红 · 树影鎏金',
+    observable: '荒漠落日 · 胡杨剪影 · 暮色温柔',
+    blocked: '西方沙尘 · 胡杨霞光隐没',
+  },
+  xiangbishan: {
+    high: '漓江燃霞 · 象山映红 · 水面流金',
+    observable: '江上落日 · 象山剪影 · 暮色温柔',
+    blocked: '西方云墙 · 漓江霞光难现',
+  },
+  helanshan: {
+    high: '岩画披霞 · 山影映红 · 荒漠流金',
+    observable: '山麓落日 · 岩石剪影 · 暮色澄明',
+    blocked: '西方云幕 · 贺兰霞光隐没',
+  },
+  kanas: {
+    high: '神湾燃霞 · 镜面映红 · 针林流金',
+    observable: '湖湾落日 · 镜面倒影 · 暮色澄明',
+    blocked: '西方云幕 · 神湾霞光隐没',
+  },
+  taipei: {
+    high: '城市燃霞 · 楼宇鎏金 · 象山映红',
+    observable: '山顶落日 · 天际澄明 · 蓝调城市',
+    blocked: '西方云墙 · 象山霞光隐没',
+  },
+  'tianjin-wudadao': {
+    high: '洋楼披霞 · 梧桐映红 · 街区流金',
+    observable: '城市落日 · 洋楼剪影 · 暮色温柔',
+    blocked: '西方云墙 · 五大道霞光隐没',
+  },
+  coloane: {
+    high: '海岸燃霞 · 黑沙映红 · 离岛流金',
+    observable: '海上落日 · 沙岸剪影 · 暮色澄明',
+    blocked: '海云遮光 · 离岛霞光隐没',
   },
 };
 
@@ -434,6 +548,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // Event bindings
 // ============================================
 function bindEvents() {
+  bindSpotSearch();
   const xihuCard = document.getElementById('card-xihu');
   xihuCard.addEventListener('click', event => {
     event.preventDefault();
@@ -548,15 +663,19 @@ function bindEvents() {
   });
 
   document.querySelectorAll('.city-card').forEach(card => {
-    // 卡片本身是 <a href="/spots/{slug}"> 真实链接。不拦截默认跳转，
-    // 让点击真实导航到城市落地页：既产生真实 pageview、给 Bing 内链权重，
-    // 落地页又会通过 openDetailFromUrl 自动按 URL 打开详情面板（弹层体验不丢）。
-    card.addEventListener('click', () => {
+    // 保留真实 href 供搜索引擎、复制链接和新标签页使用；普通点击在当前页打开抽屉，
+    // 避免返回首页时丢失用户正在浏览的卡片位置。
+    card.addEventListener('click', event => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
       trackUmamiEvent('spot-card-click', card.dataset.spot);
+      openDetail(card.dataset.spot, { source: 'card' });
     });
     card.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
         trackUmamiEvent('spot-card-click', card.dataset.spot);
+        openDetail(card.dataset.spot, { source: 'card' });
       }
     });
   });
@@ -712,19 +831,20 @@ async function fetchTimeline() {
 // ============================================
 // Regional photography spots
 // ============================================
-function renderRegionalCards() {
-  const grid = document.getElementById('regional-grid');
-  grid.innerHTML = REGIONAL_SPOTS.map(spot => `
+function renderSpotCards(grid, spots) {
+  if (!grid) return;
+  grid.innerHTML = spots.map(spot => `
     <a
       class="city-card city-card--${spot.slug}"
       id="city-${spot.slug}"
       data-spot="${spot.slug}"
+      data-search="${buildSpotSearchText(spot)}"
       href="/spots/${spot.slug}"
       aria-expanded="false"
       aria-controls="detail-panel"
       aria-label="${spot.name}晚霞预测，点击展开摄影指南"
     >
-      <img class="city-card__image" src="assets/city-${spot.slug}.webp?v=20260726-city-images-v11" alt="${spot.name}标志性晚霞摄影景观" loading="lazy" decoding="async">
+      <img class="city-card__image" src="assets/city-${spot.slug}.webp?v=20260810-province-live-v12" alt="${spot.name}标志性晚霞摄影景观" loading="lazy" decoding="async">
       <div class="city-card__content">
         <div class="city-card__top">
           <p class="city-card__city">${spot.city}</p>
@@ -748,6 +868,84 @@ function renderRegionalCards() {
       </div>
     </a>
   `).join('');
+}
+
+function renderRegionalCards() {
+  renderSpotCards(document.getElementById('regional-grid'), REGIONAL_SPOTS);
+  renderSpotCards(document.getElementById('province-grid'), PROVINCE_FORECAST_SPOTS);
+}
+
+function buildSpotSearchText(spot) {
+  return [spot.city, spot.name, spot.hook, spot.slug]
+    .join(' ')
+    .normalize('NFKC')
+    .toLocaleLowerCase('zh-CN');
+}
+
+function filterSpotCards(query) {
+  const terms = query
+    .normalize('NFKC')
+    .trim()
+    .toLocaleLowerCase('zh-CN')
+    .split(/\s+/)
+    .filter(Boolean);
+  const regionalGrid = document.getElementById('regional-grid');
+  const provinceGrid = document.getElementById('province-grid');
+  const provinceSection = document.getElementById('province-section');
+  const spotSearchEmpty = document.getElementById('spot-search-empty');
+  let regionalCount = 0;
+  let provinceCount = 0;
+
+  document.querySelectorAll('.city-card[data-search]').forEach(card => {
+    const matches = terms.every(term => card.dataset.search.includes(term));
+    card.hidden = !matches;
+    if (!matches) return;
+    if (regionalGrid.contains(card)) regionalCount += 1;
+    if (provinceGrid.contains(card)) provinceCount += 1;
+  });
+
+  const matchedCount = regionalCount + provinceCount;
+  regionalGrid.hidden = terms.length > 0 && regionalCount === 0;
+  provinceSection.hidden = terms.length > 0 && provinceCount === 0;
+  spotSearchEmpty.hidden = matchedCount > 0 || terms.length === 0;
+}
+
+function bindSpotSearch() {
+  const spotSearch = document.getElementById('spot-search');
+  const spotSearchToggle = document.getElementById('spot-search-toggle');
+  const spotSearchInput = document.getElementById('spot-search-input');
+  const spotSearchClear = document.getElementById('spot-search-clear');
+  const regionalHeading = spotSearch.closest('.regional__heading');
+
+  const updateSearch = () => {
+    filterSpotCards(spotSearchInput.value);
+    spotSearchClear.hidden = spotSearchInput.value.length === 0;
+  };
+
+  spotSearchToggle.addEventListener('click', () => {
+    spotSearch.classList.add('is-open');
+    regionalHeading.classList.add('search-open');
+    spotSearchToggle.setAttribute('aria-expanded', 'true');
+    spotSearchInput.focus();
+  });
+  spotSearchInput.addEventListener('input', updateSearch);
+  spotSearchInput.addEventListener('search', updateSearch);
+  spotSearchInput.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    spotSearchInput.value = '';
+    filterSpotCards('');
+    spotSearchClear.hidden = true;
+    spotSearch.classList.remove('is-open');
+    regionalHeading.classList.remove('search-open');
+    spotSearchToggle.setAttribute('aria-expanded', 'false');
+    spotSearchToggle.focus();
+  });
+  spotSearchClear.addEventListener('click', () => {
+    spotSearchInput.value = '';
+    filterSpotCards('');
+    spotSearchClear.hidden = true;
+    spotSearchInput.focus();
+  });
 }
 
 async function fetchRegionalSpots() {
@@ -1213,10 +1411,13 @@ async function createSharePoster(data, spotId) {
   ctx.font = '700 28px Manrope, sans-serif';
   ctx.fillText('sunsetpredict.cloud/spots/' + spotId, 72, 1840);
   ctx.textAlign = 'right';
-  ctx.fillStyle = 'rgba(255,255,255,0.38)';
-  ctx.font = '500 22px "Noto Sans SC", sans-serif';
-  ctx.fillText('长按保存 · 分享给一起等晚霞的人', 1008, 1844);
+  ctx.fillStyle = 'rgba(255,200,160,0.62)';
+  ctx.font = '600 24px "Noto Sans SC", sans-serif';
+  ctx.fillText('看明晚霞况 · 长按识别', 1008, 1840);
   ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(255,255,255,0.34)';
+  ctx.font = '500 21px "Noto Sans SC", sans-serif';
+  ctx.fillText('长按保存 · 分享给一起等晚霞的人', 72, 1878);
 
   const blob = await new Promise((resolve, reject) => canvas.toBlob(
     value => value ? resolve(value) : reject(new Error('长图生成失败')),
@@ -1906,47 +2107,12 @@ function renderToday(data) {
   renderBlueHourBrief(document.getElementById('xihu-blue-hour'), data);
   applyObservationState(document.getElementById('card-xihu'), score, data.probability);
   scheduleBlueHourTheme(data);
-  startSunsetHook(data);
 
   document.getElementById('card-xihu').setAttribute(
     'aria-label',
     `西湖${relativeDayLabel(timelineOffsetForDate(data.date) ?? 0)}${data.weather?.label || ''}，晚霞指数${score}分，观测成功率${data.probability ?? 0}%，点击展开摄影指南`
   );
 
-}
-
-// ============================================
-// Sunset countdown hook (黄金 4 小时场景)
-// ============================================
-let sunsetHookTimer = null;
-function startSunsetHook(data) {
-  const el = document.getElementById('sunset-hook');
-  const textEl = document.getElementById('sunset-hook-text');
-  if (!el || !textEl) return;
-  const sunset = data?.sunTimes?.sunset;
-  if (!sunset) { el.hidden = true; if (sunsetHookTimer) { clearInterval(sunsetHookTimer); sunsetHookTimer = null; } return; }
-  if (sunsetHookTimer) clearInterval(sunsetHookTimer);
-  const target = Date.parse(`${data.date}T${sunset}:00+08:00`);
-  if (Number.isNaN(target)) { el.hidden = true; return; }
-  function update() {
-    const now = Date.now();
-    const diff = target - now;
-    if (diff <= 0) { el.hidden = true; clearInterval(sunsetHookTimer); sunsetHookTimer = null; return; }
-    el.hidden = false;
-    const hrs = Math.floor(diff / 3600000);
-    const mins = Math.floor((diff % 3600000) / 60000);
-    let label;
-    if (hrs >= 4) {
-      label = `距今日日落 ${hrs} 小时 · 今晚值得拍吗？`;
-    } else if (hrs >= 1) {
-      label = `距日落 ${hrs} 时 ${mins} 分 · 决策黄金期`;
-    } else {
-      label = `距日落 ${mins} 分钟 · 现在出门！`;
-    }
-    textEl.textContent = label;
-  }
-  update();
-  sunsetHookTimer = setInterval(update, 60000);
 }
 
 // ============================================
@@ -2003,6 +2169,20 @@ function resetDetailDragStyles() {
   overlay.style.removeProperty('opacity');
 }
 
+function lockDetailPageScroll() {
+  detailPageScrollY = window.scrollY || window.pageYOffset || 0;
+  document.body.style.setProperty('--detail-scroll-offset', `-${detailPageScrollY}px`);
+  document.body.classList.add('detail-open');
+}
+
+function unlockDetailPageScroll() {
+  const restoreY = detailPageScrollY;
+  document.body.classList.remove('detail-open');
+  document.body.style.removeProperty('--detail-scroll-offset');
+  window.scrollTo(0, restoreY);
+  requestAnimationFrame(() => window.scrollTo(0, restoreY));
+}
+
 function openDetail(spotId = 'xihu', { updateUrl = true, focus = true, source = 'direct' } = {}) {
   const data = detailDataForSpot(spotId);
   const meta = DETAIL_SPOTS[spotId];
@@ -2034,7 +2214,7 @@ function openDetail(spotId = 'xihu', { updateUrl = true, focus = true, source = 
   panel.setAttribute('aria-hidden', 'false');
   overlay.setAttribute('aria-hidden', 'false');
   card.setAttribute('aria-expanded', 'true');
-  document.body.classList.add('detail-open');
+  lockDetailPageScroll();
   if (updateUrl) updateDetailUrl(true, spotId);
   if (focus) panel.focus({ preventScroll: true });
   setTimeout(refreshIcons, 80);
@@ -2058,7 +2238,7 @@ function closeDetail({ updateUrl = true, focus = true } = {}) {
   overlay.setAttribute('aria-hidden', 'true');
   panel.setAttribute('inert', '');
   card?.setAttribute('aria-expanded', 'false');
-  document.body.classList.remove('detail-open');
+  unlockDetailPageScroll();
   if (updateUrl) updateDetailUrl(false);
   activeDetailSpot = null;
   detailOpenedAt = 0;

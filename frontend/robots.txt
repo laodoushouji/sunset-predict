@@ -1,7 +1,18 @@
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /sunset
 Disallow: /health
 
 Sitemap: https://sunsetpredict.cloud/sitemap.xml

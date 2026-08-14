@@ -10,13 +10,9 @@ const {
   listTopPhotos,
   getFeedbackStats,
 } = require('./feedback-db');
+const { FORECAST_SPOTS } = require('./cities');
 
-const FEEDBACK_SPOTS = new Set([
-  'xihu', 'waitan', 'beijing', 'erhai', 'chongqing',
-  'xiamen', 'qingdao', 'chengdu', 'shenzhen', 'huangshan',
-  'guangzhou', 'wuhan', 'sanya', 'xian', 'nanjing', 'xiapu', 'wuxi',
-  'hongkong',
-]);
+const FEEDBACK_SPOTS = new Set(['xihu', 'waitan', ...Object.keys(FORECAST_SPOTS)]);
 const MAX_COMMENT_LENGTH = 300;
 const MAX_PHOTO_BYTES = 1_200_000;
 const PHOTO_EXTENSIONS = new Map([

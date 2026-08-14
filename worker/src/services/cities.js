@@ -422,7 +422,7 @@ function satelliteWindowFor(satellite, config) {
 
 async function getCityPrediction(slug, options = {}) {
   const resolvedSlug = CITY_ALIASES[slug] || slug;
-  const config = CITY_SPOTS[resolvedSlug];
+  const config = FORECAST_SPOTS[resolvedSlug];
   if (!config) throw new Error(`未知站点: ${slug}`);
 
   const fetchImpl = options.fetchImpl || globalThis.fetch;
@@ -433,17 +433,21 @@ async function getCityPrediction(slug, options = {}) {
   const targetFields = 'temperature_2m,relative_humidity_2m,visibility,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_direction_10m,pressure_msl,relative_humidity_925hPa,relative_humidity_700hPa,relative_humidity_250hPa,wind_speed_700hPa,precipitation_probability,precipitation,rain,weather_code';
   const windowFields = 'cloud_cover_low,visibility';
   let qweatherConfigured = false;
-  try {
-    qweatherConfigured = Boolean(qweatherConfig(options));
-  } catch {
-    qweatherConfigured = true;
+  if (config.useQWeather !== false) {
+    try {
+      qweatherConfigured = Boolean(qweatherConfig(options));
+    } catch {
+      qweatherConfigured = true;
+    }
   }
   const [targetPayload, windowPayload, qweatherResult] = await Promise.all([
     fetchJson(forecastUrl(config.target, targetFields, true, true), fetchImpl, options.timeoutMs, options.retryOptions),
     fetchJson(forecastUrl(windowPoint, windowFields), fetchImpl, options.timeoutMs, options.retryOptions),
-    fetchQWeatherHourly(config.target, { ...options, fetchImpl })
-      .then(value => ({ value }))
-      .catch(() => ({ value: null })),
+    config.useQWeather === false
+      ? Promise.resolve({ value: null })
+      : fetchQWeatherHourly(config.target, { ...options, fetchImpl })
+        .then(value => ({ value }))
+        .catch(() => ({ value: null })),
   ]);
   return buildCityPrediction(config, targetPayload, windowPayload, windowPoint, {
     ...options,
@@ -568,7 +572,7 @@ async function readRegionalCache(cacheFile) {
   if (!cacheFile) return null;
   try {
     const payload = JSON.parse(await fs.readFile(cacheFile, 'utf8'));
-    if (payload?.spots?.length !== Object.keys(CITY_SPOTS).length) return null;
+    if (payload?.spots?.length !== Object.keys(FORECAST_SPOTS).length) return null;
     if (payload.spots.some(spot => !Number.isFinite(spot.quality) || spot.error)) return null;
     return payload;
   } catch {
@@ -617,8 +621,8 @@ async function allSettledWithConcurrency(items, limit, task) {
 }
 
 async function getAllCityPredictions(options = {}) {
-  const entries = Object.keys(CITY_SPOTS);
-  const configs = entries.map(slug => CITY_SPOTS[slug]);
+  const entries = Object.keys(FORECAST_SPOTS);
+  const configs = entries.map(slug => FORECAST_SPOTS[slug]);
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   if (typeof fetchImpl !== 'function') throw new Error('fetch implementation is required');
   const windowDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
@@ -637,7 +641,7 @@ async function getAllCityPredictions(options = {}) {
       fetchJson(forecastUrl(configs.map(config => config.target), targetFields, true, true), fetchImpl, options.timeoutMs, options.retryOptions),
       fetchJson(forecastUrl(windowPoints, windowFields), fetchImpl, options.timeoutMs, options.retryOptions),
       allSettledWithConcurrency(
-        configs,
+        configs.filter(config => config.useQWeather !== false),
         5,
         config => fetchQWeatherHourly(config.target, { ...options, fetchImpl })
       ),
@@ -646,7 +650,10 @@ async function getAllCityPredictions(options = {}) {
     const windowPayloads = normalizeBatchPayload(windowBatch, entries.length);
     const result = {
       spots: configs.map((config, index) => {
-        const qweatherResult = qweatherResults[index];
+        const qweatherIndex = configs
+          .slice(0, index)
+          .filter(item => item.useQWeather !== false).length;
+        const qweatherResult = config.useQWeather === false ? null : qweatherResults[qweatherIndex];
         return buildCityPrediction(
           config,
           targetPayloads[index],
@@ -654,7 +661,7 @@ async function getAllCityPredictions(options = {}) {
           windowPoints[index],
           {
             ...options,
-            qweatherConfigured,
+            qweatherConfigured: config.useQWeather === false ? false : qweatherConfigured,
             qweatherPayload: qweatherResult?.status === 'fulfilled' ? qweatherResult.value : null,
             satelliteConfigured: Boolean(options.satellite),
             satelliteWindow: satelliteWindowFor(options.satellite, config),
@@ -673,9 +680,220 @@ async function getAllCityPredictions(options = {}) {
   }
 }
 
+// 省份热门落日点：复用全国站通用物理模型与 Open-Meteo 数据。
+// 为避免全国聚合接口额外并发 18 次 QWeather 请求，这批站点使用 Open-Meteo weather_code
+// 与降水字段展示天气；评分、成功率、蓝调和日落窗口均与原全国站保持一致。
+const PROVINCE_SPOTS = {
+  'caoyuan-tianlu': {
+    spot: 'caoyuan-tianlu',
+    spotName: '张家口草原天路',
+    location: '河北 · 张家口',
+    target: { lat: 41.18, lon: 114.73 },
+    window: { name: '张家口西方高原草坡窗口', distanceKm: 100 },
+    bestSpot: { name: '草原天路风车矩阵段', desc: '风车群与草坡作前景，西方云霞铺天' },
+    hook: '风车矩阵与高原落日预报',
+    traits: ['mountain'],
+    useQWeather: false,
+  },
+  hukou: {
+    spot: 'hukou',
+    spotName: '吉县壶口瀑布',
+    location: '山西 · 临汾',
+    target: { lat: 36.13, lon: 110.45 },
+    window: { name: '晋陕峡谷西岸黄河窗口', distanceKm: 80 },
+    bestSpot: { name: '壶口山西侧观瀑台', desc: '黄河落差与落日水雾同框，常现彩虹' },
+    hook: '黄河水雾与峡谷落日预报',
+    traits: ['water', 'mountain'],
+    useQWeather: false,
+  },
+  longmen: {
+    spot: 'longmen',
+    spotName: '洛阳龙门石窟',
+    location: '河南 · 洛阳',
+    target: { lat: 34.56, lon: 112.48 },
+    window: { name: '伊河西岸窗口', distanceKm: 80 },
+    bestSpot: { name: '西山石窟滨水步道', desc: '石窟剪影与伊河晚霞倒影同框' },
+    hook: '石窟剪影与伊河晚霞预报',
+    traits: ['water', 'city'],
+    useQWeather: false,
+  },
+  'haerbin-song': {
+    spot: 'haerbin-song',
+    spotName: '哈尔滨松花江铁路桥',
+    location: '黑龙江 · 哈尔滨',
+    target: { lat: 45.77, lon: 126.62 },
+    window: { name: '松花江西向江面窗口', distanceKm: 100 },
+    bestSpot: { name: '中东铁路桥（老江桥）', desc: '城市江景落日，钢铁桥架作前景' },
+    hook: '老江桥剪影与松花江落日预报',
+    traits: ['water', 'city'],
+    useQWeather: false,
+  },
+  wusongdao: {
+    spot: 'wusongdao',
+    spotName: '吉林雾凇岛',
+    location: '吉林 · 吉林市',
+    target: { lat: 44.96, lon: 126.63 },
+    window: { name: '松花江北岸西向窗口', distanceKm: 100 },
+    bestSpot: { name: '雾凇岛乌拉街江段', desc: '界江与村落剪影，秋冬落日清冽' },
+    hook: '雾凇江面与清冽落日预报',
+    traits: ['water'],
+    useQWeather: false,
+  },
+  yalu: {
+    spot: 'yalu',
+    spotName: '丹东鸭绿江断桥',
+    location: '辽宁 · 丹东',
+    target: { lat: 40.11, lon: 124.39 },
+    window: { name: '鸭绿江西向界河窗口', distanceKm: 100 },
+    bestSpot: { name: '鸭绿江断桥观景台', desc: '中朝界河落日，断桥钢架剪影辨识度强' },
+    hook: '断桥剪影与界河落日预报',
+    traits: ['water', 'city'],
+    useQWeather: false,
+  },
+  hengshan: {
+    spot: 'hengshan',
+    spotName: '衡山祝融峰',
+    location: '湖南 · 衡阳',
+    target: { lat: 27.30, lon: 112.74 },
+    window: { name: '南岳西岭窗口', distanceKm: 60 },
+    bestSpot: { name: '祝融峰顶观日台', desc: '湖南第一观日落云海地，峰林被染红' },
+    hook: '祝融峰云海与峰林晚霞预报',
+    traits: ['mountain'],
+    useQWeather: false,
+  },
+  lushan: {
+    spot: 'lushan',
+    spotName: '庐山含鄱口',
+    location: '江西 · 九江',
+    target: { lat: 29.53, lon: 116.03 },
+    window: { name: '鄱阳湖北向湖口窗口', distanceKm: 80 },
+    bestSpot: { name: '含鄱口望鄱亭', desc: '鄱阳湖落日，江湖一览，江西经典机位' },
+    hook: '鄱阳湖落日与山湖云霞预报',
+    traits: ['mountain', 'water'],
+    useQWeather: false,
+  },
+  fanjing: {
+    spot: 'fanjing',
+    spotName: '铜仁梵净山',
+    location: '贵州 · 铜仁',
+    target: { lat: 27.90, lon: 108.69 },
+    window: { name: '黔东武陵山西坡窗口', distanceKm: 60 },
+    bestSpot: { name: '红云金顶观景台', desc: '云海日落 + 蘑菇石剪影，贵州最网红' },
+    hook: '红云金顶与武陵云海预报',
+    traits: ['mountain'],
+    useQWeather: false,
+  },
+  namtso: {
+    spot: 'namtso',
+    spotName: '当雄纳木错',
+    location: '西藏 · 拉萨',
+    target: { lat: 30.72, lon: 90.60 },
+    window: { name: '念青唐古拉西向圣湖窗口', distanceKm: 100 },
+    bestSpot: { name: '纳木错扎西半岛', desc: '圣湖落日，雪峰映湖，三大圣湖之首' },
+    hook: '圣湖倒影与雪峰落日预报',
+    traits: ['water', 'mountain'],
+    useQWeather: false,
+  },
+  heimahe: {
+    spot: 'heimahe',
+    spotName: '青海湖黑马河',
+    location: '青海 · 海南州',
+    target: { lat: 36.58, lon: 99.78 },
+    window: { name: '青海湖西岸窗口', distanceKm: 100 },
+    bestSpot: { name: '黑马河乡湖滨', desc: '湖面正面落日，青海最经典看日落地' },
+    hook: '青海湖正面落日与水面铺霞预报',
+    traits: ['water'],
+    useQWeather: false,
+  },
+  ejina: {
+    spot: 'ejina',
+    spotName: '额济纳胡杨林',
+    location: '内蒙古 · 阿拉善',
+    target: { lat: 41.96, lon: 101.07 },
+    window: { name: '巴丹吉林西缘荒漠窗口', distanceKm: 100 },
+    bestSpot: { name: '额济纳二道桥胡杨林', desc: '金秋胡杨落日，现象级网红（窗口仅十几天）' },
+    hook: '胡杨金秋与荒漠落日预报',
+    traits: ['desert'],
+    useQWeather: false,
+  },
+  xiangbishan: {
+    spot: 'xiangbishan',
+    spotName: '桂林象鼻山',
+    location: '广西 · 桂林',
+    target: { lat: 25.27, lon: 110.29 },
+    window: { name: '漓江西向城徽窗口', distanceKm: 60 },
+    bestSpot: { name: '象鼻山滨水观景道', desc: '漓江落日 + 城徽剪影，广西代表画面' },
+    hook: '象鼻山剪影与漓江晚霞预报',
+    traits: ['water', 'mountain'],
+    useQWeather: false,
+  },
+  helanshan: {
+    spot: 'helanshan',
+    spotName: '贺兰山岩画',
+    location: '宁夏 · 银川',
+    target: { lat: 38.49, lon: 105.97 },
+    window: { name: '贺兰山西麓山影窗口', distanceKm: 50 },
+    bestSpot: { name: '贺兰山岩画遗址区', desc: '山影落日，岩画作前景，苍茫感强' },
+    hook: '贺兰山影与荒漠落日预报',
+    traits: ['mountain', 'desert'],
+    useQWeather: false,
+  },
+  kanas: {
+    spot: 'kanas',
+    spotName: '喀纳斯神仙湾',
+    location: '新疆 · 阿勒泰',
+    target: { lat: 48.73, lon: 87.02 },
+    window: { name: '阿尔泰西向河湾窗口', distanceKm: 80 },
+    bestSpot: { name: '喀纳斯神仙湾木栈道', desc: '晨雾/晚霞双绝，河湾镜面，新疆顶流' },
+    hook: '神仙湾镜面与阿尔泰晚霞预报',
+    traits: ['water', 'mountain'],
+    useQWeather: false,
+  },
+  taipei: {
+    spot: 'taipei',
+    spotName: '台北象山',
+    location: '台湾 · 台北',
+    target: { lat: 25.03, lon: 121.57 },
+    window: { name: '台北盆地西向天际线窗口', distanceKm: 100 },
+    bestSpot: { name: '象山六巨石/摄影平台', desc: '城市天际线落日，台湾最经典机位' },
+    hook: '台北天际线与象山蓝调预报',
+    traits: ['city', 'mountain'],
+    useQWeather: false,
+  },
+  'tianjin-wudadao': {
+    spot: 'tianjin-wudadao',
+    spotName: '天津五大道',
+    location: '天津 · 和平区',
+    target: { lat: 39.12, lon: 117.20 },
+    window: { name: '海河以西洋楼窗口', distanceKm: 100 },
+    bestSpot: { name: '五大道睦南道梧桐区', desc: '洋楼梧桐晚霞，小红书热门落日机位' },
+    hook: '洋楼梧桐与城市晚霞预报',
+    traits: ['city'],
+    useQWeather: false,
+  },
+  coloane: {
+    spot: 'coloane',
+    spotName: '澳门路环黑沙',
+    location: '澳门 · 路环',
+    target: { lat: 22.12, lon: 113.56 },
+    window: { name: '路环西向海岸窗口', distanceKm: 100 },
+    bestSpot: { name: '黑沙海滩西岸', desc: '离岛海滩落日，澳门少有的自然落日地' },
+    hook: '黑沙海岸与离岛落日预报',
+    traits: ['water'],
+    useQWeather: false,
+  },
+};
+
+const FORECAST_SPOTS = Object.freeze({
+  ...CITY_SPOTS,
+  ...PROVINCE_SPOTS,
+});
+
 module.exports = {
   CITY_ALIASES,
   CITY_SPOTS,
+  FORECAST_SPOTS,
+  PROVINCE_SPOTS,
   applySatelliteWindow,
   calculateSunsetAzimuth,
   destinationPoint,

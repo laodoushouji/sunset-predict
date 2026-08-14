@@ -1,6 +1,6 @@
 const net = require('node:net');
 const geoip = require('fast-geoip');
-const { CITY_SPOTS } = require('./cities');
+const { FORECAST_SPOTS } = require('./cities');
 
 const CORE_SPOTS = {
   xihu: {
@@ -19,7 +19,7 @@ const CORE_SPOTS = {
 
 const NEARBY_SPOTS = [
   ...Object.values(CORE_SPOTS),
-  ...Object.values(CITY_SPOTS),
+  ...Object.values(FORECAST_SPOTS),
 ].map(({ spot, spotName, location, target }) => ({
   spot,
   spotName,

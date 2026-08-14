@@ -8,6 +8,7 @@ const html = fs.readFileSync(path.join(root, 'frontend/index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'frontend/js/app.js'), 'utf8');
 const styles = fs.readFileSync(path.join(root, 'frontend/css/styles.css'), 'utf8');
 const nginx = fs.readFileSync(path.join(root, 'deploy/sunset.conf'), 'utf8');
+const server = fs.readFileSync(path.join(root, 'worker/src/server.mjs'), 'utf8');
 
 test('地区留言只保留单图上传与300字评论', () => {
   assert.match(html, /id="feedback-photo"[^>]+accept="image\/jpeg,image\/png,image\/webp"/);
@@ -41,4 +42,8 @@ test('详情最底部按地区展示跨日期留言并支持分页', () => {
 test('上传链路允许压缩后的JSON体积但仍限制请求上限', () => {
   assert.match(nginx, /client_max_body_size 2m;/);
   assert.match(app, /仅支持 JPEG、PNG 或 WebP 图片/);
+  assert.match(server, /'https:\/\/sunsetpredict\.cloud'/);
+  assert.match(server, /'https:\/\/glowsunset\.cn'/);
+  assert.match(server, /'https:\/\/www\.glowsunset\.cn'/);
+  assert.match(server, /!FEEDBACK_ORIGINS\.has\(origin\)/);
 });

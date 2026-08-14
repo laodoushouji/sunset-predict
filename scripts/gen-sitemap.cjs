@@ -2,11 +2,11 @@
 // 数据源与线上渲染一致：buildSpotConfig(CITY_SPOTS) 即 19 城 slug。
 const fs = require('fs');
 const path = require('path');
-const { CITY_SPOTS } = require('../worker/src/services/cities');
+const { CITY_SPOTS, PROVINCE_SPOTS } = require('../worker/src/services/cities');
 const { buildSpotConfig } = require('../worker/src/services/seo');
 
 const SITE_URL = 'https://sunsetpredict.cloud';
-const spotConfig = buildSpotConfig(CITY_SPOTS);
+const spotConfig = buildSpotConfig(CITY_SPOTS, PROVINCE_SPOTS);
 const slugs = Object.keys(spotConfig); // 19 城
 const lastmod = new Date().toISOString().slice(0, 10);
 
@@ -15,7 +15,7 @@ const url = (loc, priority) =>
 
 const urls = [url(`${SITE_URL}/`, '1.0')]
   .concat(
-    slugs.map(s => url(`${SITE_URL}/spots/${s}`, s === 'xihu' || s === 'waitan' ? '0.9' : '0.8'))
+    slugs.map(s => url(`${SITE_URL}/spots/${s}`, s === 'xihu' || s === 'waitan' ? '0.9' : (PROVINCE_SPOTS[s] ? '0.7' : '0.8')))
   )
   .join('\n');
 

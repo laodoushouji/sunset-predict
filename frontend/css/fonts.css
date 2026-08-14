@@ -1,0 +1,13 @@
+/* 自托管 Noto 字体（子集化，仅含项目用到的汉字 + 拉丁字符），移除对 Google Fonts 的依赖。
+   避免中国大陆网络下 fonts.googleapis.com / fonts.gstatic.com 不可达，导致字体加载失败、
+   回退到系统衬线体后生僻汉字缺字显示为问号/方块。 */
+@font-face{font-family:"Noto Serif SC";font-style:normal;font-weight:400;font-display:swap;src:url("/assets/fonts/noto-serif-sc-400.woff2") format("woff2");}
+@font-face{font-family:"Noto Serif SC";font-style:normal;font-weight:500;font-display:swap;src:url("/assets/fonts/noto-serif-sc-500.woff2") format("woff2");}
+@font-face{font-family:"Noto Serif SC";font-style:normal;font-weight:600;font-display:swap;src:url("/assets/fonts/noto-serif-sc-600.woff2") format("woff2");}
+@font-face{font-family:"Noto Serif SC";font-style:normal;font-weight:700;font-display:swap;src:url("/assets/fonts/noto-serif-sc-700.woff2") format("woff2");}
+@font-face{font-family:"Noto Serif SC";font-style:normal;font-weight:800;font-display:swap;src:url("/assets/fonts/noto-serif-sc-800.woff2") format("woff2");}
+@font-face{font-family:"Noto Sans SC";font-style:normal;font-weight:400;font-display:swap;src:url("/assets/fonts/noto-sans-sc-400.woff2") format("woff2");}
+@font-face{font-family:"Noto Sans SC";font-style:normal;font-weight:500;font-display:swap;src:url("/assets/fonts/noto-sans-sc-500.woff2") format("woff2");}
+@font-face{font-family:"Noto Sans SC";font-style:normal;font-weight:600;font-display:swap;src:url("/assets/fonts/noto-sans-sc-600.woff2") format("woff2");}
+@font-face{font-family:"Noto Sans SC";font-style:normal;font-weight:700;font-display:swap;src:url("/assets/fonts/noto-sans-sc-700.woff2") format("woff2");}
+@font-face{font-family:"Noto Sans SC";font-style:normal;font-weight:800;font-display:swap;src:url("/assets/fonts/noto-sans-sc-800.woff2") format("woff2");}

@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { getXihuPrediction } = require('./services/xihu');
 const { getShanghaiPrediction } = require('./services/shanghai');
-const { CITY_ALIASES, CITY_SPOTS, getAllCityPredictions } = require('./services/cities');
+const { CITY_ALIASES, CITY_SPOTS, FORECAST_SPOTS, PROVINCE_SPOTS, getAllCityPredictions } = require('./services/cities');
 const { SatelliteNowcast } = require('./services/satellite');
 const { clientIpFromRequest, findNearestSpotByIp } = require('./services/nearby');
 const { buildForecastBootstrap, injectForecastBootstrap, shanghaiDate } = require('./services/frontend-bootstrap');
@@ -42,19 +42,28 @@ const REGIONAL_CACHE_FILE = path.join(CACHE_ROOT, 'regional-latest.json');
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const cache = createMemoryCache(CACHE_TTL_MS);
 const feedbackCache = createMemoryCache(30 * 1000);
-const SEO_SPOTS = buildSpotConfig(CITY_SPOTS);
+const SEO_SPOTS = buildSpotConfig(CITY_SPOTS, PROVINCE_SPOTS);
+const FEEDBACK_ORIGINS = new Set([
+  'https://sunsetpredict.cloud',
+  'https://glowsunset.cn',
+  'https://www.glowsunset.cn',
+]);
 
 const STATIC_FILES = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/credits', ['credits.html', 'text/html; charset=utf-8']],
   ['/credits/', ['credits.html', 'text/html; charset=utf-8']],
+  ['/about', ['about.html', 'text/html; charset=utf-8']],
+  ['/about/', ['about.html', 'text/html; charset=utf-8']],
   ['/robots.txt', ['robots.txt', 'text/plain; charset=utf-8']],
+  ['/llms.txt', ['llms.txt', 'text/plain; charset=utf-8']],
   ['/sitemap.xml', ['sitemap.xml', 'application/xml; charset=utf-8']],
   ['/google644a617b7e117520.html', ['google644a617b7e117520.html', 'text/html; charset=utf-8']],
   ['/css/styles.css', ['css/styles.css', 'text/css; charset=utf-8']],
   ['/js/app.js', ['js/app.js', 'text/javascript; charset=utf-8']],
   ['/assets/xihu-sunset.webp', ['assets/xihu-sunset.webp', 'image/webp']],
   ['/assets/waitan-sunset.webp', ['assets/waitan-sunset.webp', 'image/webp']],
+  ['/assets/city-generic-sunset.webp', ['assets/city-generic-sunset.webp', 'image/webp']],
   ['/assets/city-beijing.webp', ['assets/city-beijing.webp', 'image/webp']],
   ['/assets/city-erhai.webp', ['assets/city-erhai.webp', 'image/webp']],
   ['/assets/city-chongqing.webp', ['assets/city-chongqing.webp', 'image/webp']],
@@ -76,6 +85,9 @@ const STATIC_FILES = new Map([
   ['/assets/wechat-pay.jpg', ['assets/wechat-pay.jpg', 'image/jpeg']],
   ['/wechat-pay.jpg', ['assets/wechat-pay.jpg', 'image/jpeg']],
 ]);
+for (const slug of Object.keys(PROVINCE_SPOTS)) {
+  STATIC_FILES.set(`/assets/city-${slug}.webp`, [`assets/city-${slug}.webp`, 'image/webp']);
+}
 
 function send(response, status, body, headers = {}) {
   response.writeHead(status, {
@@ -154,7 +166,32 @@ function logNearbySpot(request, requestPath) {
 async function serveStatic(requestPath, response, request) {
   const spotSlug = spotSlugFromPath(requestPath, SEO_SPOTS);
   const entry = STATIC_FILES.get(requestPath) || (spotSlug ? ['index.html', 'text/html; charset=utf-8'] : null);
-  if (!entry) return false;
+  if (!entry) {
+    // 通用前端文件兜底：服务 FRONTEND_ROOT 下未在 STATIC_FILES 显式注册的文件（如 /css/fonts.css、/assets/fonts/*.woff2）。
+    // 仅对非 /api 路径、且文件真实存在于 FRONTEND_ROOT 内（带路径穿越保护）时返回，缺失则最终 404。
+    // 置于 STATIC_FILES 判断之后，确保 sitemap.xml 等已注册资源仍走其声明的 content-type。
+    if (!requestPath.startsWith('/api/')) {
+      const filePath = path.join(FRONTEND_ROOT, requestPath);
+      const resolved = path.resolve(filePath);
+      const rootResolved = path.resolve(FRONTEND_ROOT);
+      if (resolved === rootResolved || resolved.startsWith(rootResolved + path.sep)) {
+        try {
+          const body = await fs.readFile(filePath);
+          const ext = path.extname(filePath).toLowerCase();
+          const contentType = ({'.woff2':'font/woff2','.woff':'font/woff','.webp':'image/webp','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.json':'application/json; charset=utf-8','.html':'text/html; charset=utf-8','.txt':'text/plain; charset=utf-8','.xml':'application/xml; charset=utf-8'}[ext] || 'application/octet-stream');
+          send(response, 200, body, {
+            'content-type': contentType,
+            'cache-control': 'public, max-age=86400',
+            ...(String(contentType).startsWith('text/') || ext === '.xml' ? { 'content-language': 'zh-CN' } : {}),
+          });
+          return true;
+        } catch {
+          // 文件不存在，最终 404
+        }
+      }
+    }
+    return false;
+  }
   const [relativePath, contentType] = entry;
   let body = await fs.readFile(path.join(FRONTEND_ROOT, relativePath));
   const servesApp = requestPath === '/' || Boolean(spotSlug);
@@ -174,6 +211,7 @@ async function serveStatic(requestPath, response, request) {
     body = injectForecastBootstrap(body.toString('utf8'), buildForecastBootstrap(day, today));
     body = injectSeoDocument(body, {
       citySpots: CITY_SPOTS,
+      provinceSpots: PROVINCE_SPOTS,
       slug: spotSlug,
       day,
       photos: topPhotos,
@@ -204,7 +242,7 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === 'POST' && (url.pathname === '/api/feedback' || url.pathname === '/api/feedback/')) {
       const origin = request.headers.origin;
-      if (origin && origin !== 'https://sunsetpredict.cloud') {
+      if (origin && !FEEDBACK_ORIGINS.has(origin)) {
         sendPrivateJson(response, 403, { error: '来源无效', code: 'INVALID_ORIGIN' });
         return;
       }
@@ -302,6 +340,12 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    // GEO 爬虫统计：读独立 nginx 日志，仅聚合计数（不返回原始行/IP）
+    if (url.pathname === '/api/geo-stats' || url.pathname === '/api/geo-stats/') {
+      sendJson(response, 200, await getGeoStats());
+      return;
+    }
+
     if (url.pathname === '/api/feedback' || url.pathname === '/api/feedback/') {
       const spot = String(url.searchParams.get('spot') || '');
       const messages = await feedbackCache.get(spot, () => loadFeedbackMessages(FEEDBACK_ROOT, spot));
@@ -353,7 +397,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     const cityMatch = url.pathname.match(/^\/api\/spot\/([a-z-]+)\/?$/);
-    if (cityMatch && (CITY_SPOTS[cityMatch[1]] || CITY_ALIASES[cityMatch[1]])) {
+    if (cityMatch && (FORECAST_SPOTS[cityMatch[1]] || CITY_ALIASES[cityMatch[1]])) {
       const slug = CITY_ALIASES[cityMatch[1]] || cityMatch[1];
       const regional = await cached('regional-spots', loadRegionalSpots);
       const prediction = regional.spots.find(spot => spot.spot === slug);
@@ -388,6 +432,60 @@ function shutdown() {
   if (satelliteNowcast) satelliteNowcast.stop();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 8000).unref();
+}
+
+// GEO 爬虫监控：读取本站的独立 nginx 访问日志，仅返回聚合计数（不泄露原始行/IP）。
+// 日志由 sunset.conf 的 access_log 指令生成；本地开发/测试环境文件不存在时返回 available:false。
+const GEO_LOG_FILE = '/var/log/nginx/sunsetpredict.access.log';
+const GEO_CRAWLERS = {
+  GPTBot: /GPTBot/i,
+  ClaudeBot: /ClaudeBot/i,
+  PerplexityBot: /PerplexityBot/i,
+  'Google-Extended': /Google-Extended/i,
+  'ChatGPT-User': /ChatGPT-User/i,
+  CCBot: /CCBot/i,
+  Bytespider: /Bytespider/i,
+  Applebot: /Applebot/i,
+  DuckDuckBot: /DuckDuckBot/i,
+  Bingbot: /Bingbot/i,
+  YandexBot: /YandexBot/i,
+};
+
+let geoStatsCache = { ts: 0, data: null };
+const GEO_CACHE_TTL = 5 * 60 * 1000;
+
+async function getGeoStats() {
+  const now = Date.now();
+  if (geoStatsCache.data && now - geoStatsCache.ts < GEO_CACHE_TTL) return geoStatsCache.data;
+  const result = {
+    logFile: GEO_LOG_FILE,
+    available: false,
+    totalRequests: 0,
+    aiCrawlers: Object.fromEntries(Object.keys(GEO_CRAWLERS).map(k => [k, 0])),
+    llmsTxt: { total: 0, byAi: Object.fromEntries(Object.keys(GEO_CRAWLERS).map(k => [k, 0])) },
+  };
+  try {
+    const content = await fs.readFile(GEO_LOG_FILE, 'utf8');
+    result.available = true;
+    const lines = content.split('\n');
+    result.totalRequests = lines.length - 1;
+    const isLlms = line => /"[A-Z]+\s\/llms\.txt[^\"]*\sHTTP/.test(line);
+    for (const line of lines) {
+      if (!line) continue;
+      let matched = null;
+      for (const name of Object.keys(GEO_CRAWLERS)) {
+        if (GEO_CRAWLERS[name].test(line)) { matched = name; break; }
+      }
+      if (!matched) continue;
+      result.aiCrawlers[matched] += 1;
+      if (isLlms(line)) result.llmsTxt.byAi[matched] += 1;
+      if (isLlms(line)) result.llmsTxt.total += 1;
+    }
+  } catch (error) {
+    result.error = error.code || String(error.message);
+  }
+  geoStatsCache = { ts: now, data: result };
+  return result;
 }
 
 process.on('SIGTERM', shutdown);

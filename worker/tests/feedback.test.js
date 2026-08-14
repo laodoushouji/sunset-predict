@@ -63,6 +63,27 @@ test('地区留言只要求站点、日期、匿名标识并接受照片与评�
   );
 });
 
+test('新增省份站点与敦煌复用地区留言能力', () => {
+  for (const spot of ['hukou', 'dunhuang']) {
+    const normalized = normalizeFeedbackPayload({
+      spot,
+      date: '2026-07-17',
+      clientId: 'anonymous_client_123456',
+      comment: '现场光线记录。',
+    });
+    assert.equal(normalized.spot, spot);
+  }
+  assert.throws(
+    () => normalizeFeedbackPayload({
+      spot: 'not-open',
+      date: '2026-07-17',
+      clientId: 'anonymous_client_123456',
+      comment: '无效站点。',
+    }),
+    /站点无效/
+  );
+});
+
 test('反馈在今天和历史日期始终开放，未来日期不可提交', () => {
   const before = new Date('2026-07-17T11:24:00.000Z');
 

@@ -26,10 +26,8 @@
   <script id="seo-structured-data" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://sunsetpredict.cloud/#website","url":"https://sunsetpredict.cloud/","name":"Sunset Predict","alternateName":"晚霞预测","description":"专业提供杭州西湖、上海外滩等热门景区晚霞、火烧云精准预测。结合 250hPa 高空湿度与格点气象算法，为摄影师提供机位建议与参数指导。","inLanguage":"zh-CN"}]}</script>
   <!-- SEO_HEAD_END -->
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;600;700&amp;family=Noto+Serif+SC:wght@500;600&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=20260726-nanjing-v44">
+  <link rel="stylesheet" href="css/fonts.css?v=20260812-fonts-v1">
+  <link rel="stylesheet" href="css/styles.css?v=20260811-spot-search-v59">
   <script async src="https://unpkg.com/lucide@1.25.0/dist/umd/lucide.min.js"></script>
   <script
     defer
@@ -130,10 +128,6 @@
 
             <div class="card__footer">
               <span class="card__updated">更新于 <span id="update-time">--:--</span></span>
-              <span class="card__sunset-hook" id="sunset-hook" hidden>
-                <i data-lucide="clock" aria-hidden="true"></i>
-                <span id="sunset-hook-text">距今日日落 --</span>
-              </span>
               <span class="card__expand-hint" id="expand-hint">
                 <span>摄影指南</span>
                 <i data-lucide="chevron-down" aria-hidden="true"></i>
@@ -445,9 +439,49 @@
           <span class="regional__eyebrow">National photography spots</span>
           <h2 class="regional__title" id="regional-title">全国摄影站</h2>
         </div>
-        <span class="regional__note">17 个站点 · 实时试运行</span>
+        <div class="regional__tools">
+          <span class="regional__note">17 个站点 · 实时试运行</span>
+          <div class="spot-search" id="spot-search">
+            <button
+              class="spot-search__toggle"
+              id="spot-search-toggle"
+              type="button"
+              aria-label="搜索摄影站"
+              aria-expanded="false"
+              aria-controls="spot-search-field"
+            >
+              <i data-lucide="search" aria-hidden="true"></i>
+            </button>
+            <div class="spot-search__field" id="spot-search-field">
+              <i data-lucide="search" aria-hidden="true"></i>
+              <input
+                id="spot-search-input"
+                type="search"
+                placeholder="搜索城市、景点或英文名"
+                aria-label="搜索全国及省份摄影站"
+                autocomplete="off"
+                spellcheck="false"
+              >
+              <button class="spot-search__clear" id="spot-search-clear" type="button" aria-label="清空搜索" hidden>
+                <i data-lucide="x" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
+      <p class="spot-search__empty" id="spot-search-empty" aria-live="polite" hidden>该站点暂未开通</p>
       <div class="city-grid" id="regional-grid" aria-live="polite"></div>
+    </section>
+
+    <section class="province-section regional" id="province-section" aria-labelledby="province-title">
+      <div class="regional__heading">
+        <div>
+          <span class="regional__eyebrow">LOCAL SUNSET GUIDES</span>
+          <h2 class="regional__title" id="province-title">省份热门落日点</h2>
+        </div>
+        <span class="regional__note">18 个站点 · 实时预测</span>
+      </div>
+      <div class="city-grid province-grid" id="province-grid"><!-- PROVINCE_GRID --></div>
     </section>
 
     <!-- SPOT_LANDING -->
@@ -470,6 +504,7 @@
       <div class="footer">
         <span>数据由多源气象模型实时计算</span>
         <span>Hangzhou · 30.25°N, 120.15°E <a class="footer__license" href="/credits" aria-label="图片版权说明">©</a></span>
+        <p class="footer__cite">欢迎在注明出处（Sunset Predict · sunsetpredict.cloud）的前提下引用本站晚霞预测数据，详见<a href="/about">引用授权</a>。</p>
       </div>
     </footer>
   </main>
@@ -531,6 +566,6 @@
     </div>
   </div>
 
-  <script src="js/app.js?v=20260808-card-route-v52"></script>
+  <script src="js/app.js?v=20260811-spot-search-v59"></script>
 </body>
 </html>

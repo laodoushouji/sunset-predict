@@ -726,22 +726,7 @@ button,
   font-size: 0.65rem;
 }
 
-.card__sunset-hook {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: rgba(255, 214, 160, 0.82);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-}
 
-.card__sunset-hook svg {
-  width: 13px;
-  height: 13px;
-  flex-shrink: 0;
-}
 
 .card__expand-hint {
   display: inline-flex;
@@ -964,6 +949,109 @@ button,
   margin-bottom: 16px;
 }
 
+.regional__tools,
+.spot-search,
+.spot-search__field {
+  display: flex;
+  align-items: center;
+}
+
+.regional__tools {
+  gap: 14px;
+}
+
+.spot-search__toggle,
+.spot-search__clear {
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.spot-search__toggle {
+  display: none;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line-soft);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.spot-search__field {
+  width: min(300px, 29vw);
+  height: 42px;
+  gap: 9px;
+  padding: 0 10px 0 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: rgba(7, 11, 20, 0.54);
+  color: var(--muted);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  transition: border-color 220ms ease, background 220ms ease, box-shadow 220ms ease;
+}
+
+.spot-search__field:focus-within {
+  border-color: rgba(255, 195, 158, 0.35);
+  background: rgba(12, 16, 27, 0.78);
+  box-shadow: 0 0 0 4px rgba(255, 157, 104, 0.055);
+}
+
+.spot-search__field > svg,
+.spot-search__toggle svg,
+.spot-search__clear svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.spot-search__field input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.spot-search__field input::placeholder {
+  color: var(--faint);
+}
+
+.spot-search__field input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.spot-search__clear {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.spot-search__clear:hover,
+.spot-search__clear:focus-visible,
+.spot-search__toggle:hover,
+.spot-search__toggle:focus-visible {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.09);
+  outline: none;
+}
+
+.spot-search__empty {
+  margin: 10px 0 0;
+  padding: 42px 20px;
+  border: 1px dashed var(--line-soft);
+  border-radius: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
 .regional__eyebrow {
   display: block;
   margin-bottom: 5px;
@@ -991,6 +1079,18 @@ button,
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-rows: 1fr;
   gap: 16px;
+}
+
+.province-section {
+  margin: 44px 0 8px;
+}
+
+.city-card[hidden],
+.city-grid[hidden],
+.province-section[hidden],
+.spot-search__clear[hidden],
+.spot-search__empty[hidden] {
+  display: none;
 }
 
 .city-card {
@@ -2506,6 +2606,14 @@ body.detail-open {
   overflow: hidden;
 }
 
+body.detail-open {
+  position: fixed;
+  top: var(--detail-scroll-offset, 0);
+  right: 0;
+  left: 0;
+  width: 100%;
+}
+
 @keyframes modal-enter {
   from { opacity: 0; transform: translateY(16px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -2523,6 +2631,19 @@ body.detail-open {
 
 .footer__license {
   color: inherit;
+  text-decoration: none;
+}
+
+.footer__cite {
+  flex-basis: 100%;
+  margin: 6px 0 0;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+}
+
+.footer__cite a {
+  color: rgba(213, 169, 143, 0.92);
   text-decoration: none;
 }
 
@@ -2750,6 +2871,45 @@ body.detail-open {
 
   .regional__heading {
     align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .regional__tools {
+    margin-left: auto;
+  }
+
+  .regional__heading > div:first-child {
+    min-width: 0;
+  }
+
+  .regional__heading .regional__note {
+    display: none;
+  }
+
+  .spot-search__toggle {
+    display: inline-flex;
+  }
+
+  .spot-search__field {
+    display: none;
+    width: 100%;
+  }
+
+  .regional__heading.search-open .regional__tools,
+  .regional__heading.search-open .spot-search {
+    width: 100%;
+  }
+
+  .regional__heading.search-open .regional__tools {
+    margin-left: 0;
+  }
+
+  .spot-search.is-open .spot-search__toggle {
+    display: none;
+  }
+
+  .spot-search.is-open .spot-search__field {
+    display: flex;
   }
 
   .city-grid {
@@ -2889,6 +3049,9 @@ body.detail-open {
   .detail__share {
     width: 38px;
     padding: 0;
+    border-color: rgba(255, 188, 120, 0.35);
+    background: rgba(255, 140, 80, 0.12);
+    color: rgba(255, 200, 160, 0.95);
   }
 
   .detail__share span {
@@ -2961,6 +3124,19 @@ body.detail-open {
 .seo-guide__links a:hover { text-decoration: underline; }
 
 /* ---- SEO 落地页：今日概率块 / 机位 Top3 / 高分照片墙 ---- */
+.spot-landing__ai-summary {
+  margin: 14px 0;
+  padding: 12px 18px;
+  border-left: 3px solid rgba(255, 176, 97, 0.6);
+  border-radius: 10px;
+  background: rgba(255, 176, 97, 0.08);
+  font-size: 1rem;
+  line-height: 1.6;
+  color: rgba(241, 241, 244, 0.95);
+}
+.spot-landing__ai-summary p {
+  margin: 0;
+}
 .spot-landing__live {
   margin: 18px 0;
   padding: 14px 18px;

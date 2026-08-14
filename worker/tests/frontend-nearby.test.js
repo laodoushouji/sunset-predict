@@ -22,7 +22,7 @@ test('前台不展示最近站点入口，后端保留 nearby 能力与日志', 
 
 test('全国站点保持手机双列布局', () => {
   assert.match(styles, /\.city-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
-  assert.equal((script.match(/\{ slug: '[a-z]+'/g) || []).length, 17);
+  assert.equal((script.match(/\{ slug: '[a-z-]+'/g) || []).length, 35);
   for (const slug of ['guangzhou', 'wuhan', 'sanya', 'xian', 'nanjing', 'xiapu', 'wuxi', 'hongkong', 'dunhuang']) {
     assert.match(script, new RegExp(`slug: '${slug}'`));
     assert.match(styles, new RegExp(`\\.city-card--${slug}`));
@@ -30,8 +30,8 @@ test('全国站点保持手机双列布局', () => {
 });
 
 test('香港站点与新版城市图片使用可刷新缓存地址', () => {
-  assert.match(html, /js\/app\.js\?v=20260808-card-route-v52/);
-  assert.match(script, /city-\$\{spot\.slug\}\.webp\?v=20260726-city-images-v11/);
+  assert.match(html, /js\/app\.js\?v=20260811-spot-search-v59/);
+  assert.match(script, /city-\$\{spot\.slug\}\.webp\?v=20260810-province-live-v12/);
   assert.match(script, /slug: 'hongkong'/);
 });
 
@@ -43,7 +43,7 @@ test('全国摄影站优先展示景山、深圳、广州与香港', () => {
 });
 
 test('主页面所有景区卡片提供简洁蓝调时间', () => {
-  assert.match(html, /css\/styles\.css\?v=20260726-nanjing-v44/);
+  assert.match(html, /css\/styles\.css\?v=20260811-spot-search-v59/);
   assert.match(html, /id="xihu-blue-hour"/);
   assert.match(html, /id="waitan-blue-hour"/);
   assert.match(script, /class="city-card__blue-hour"/);

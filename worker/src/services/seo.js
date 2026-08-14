@@ -3,7 +3,7 @@ const { CITY_GUIDES, RELATED, TOP_SPOTS } = require('./city-guides');
 const SITE_URL = 'https://sunsetpredict.cloud';
 const SITE_NAME = 'Sunset Predict';
 const HOME_TITLE = '晚霞预测 - 今日火烧云概率与摄影指南 | Sunset Predict';
-const HOME_DESCRIPTION = '专业提供全国 19 城（杭州西湖、上海外滩、北京故宫、香港维港、敦煌鸣沙山等）晚霞、火烧云精准预测。结合 250hPa 高空湿度与格点气象算法，为摄影师提供机位建议与参数指导。';
+const HOME_DESCRIPTION = '专业提供全国 37 个热门摄影地点（杭州西湖、上海外滩、北京故宫、香港维港、敦煌鸣沙山等）晚霞、火烧云预测。结合 250hPa 高空湿度与格点气象算法，为摄影师提供机位建议与参数指导。';
 const REGIONAL_ORDER = [
   'beijing',
   'shenzhen',
@@ -23,6 +23,11 @@ const REGIONAL_ORDER = [
   'xiapu',
   'wuxi',
 ];
+const PROVINCE_ORDER = [
+  'caoyuan-tianlu', 'hukou', 'longmen', 'haerbin-song', 'wusongdao', 'yalu',
+  'hengshan', 'lushan', 'fanjing', 'namtso', 'heimahe', 'ejina',
+  'xiangbishan', 'helanshan', 'kanas', 'taipei', 'tianjin-wudadao', 'coloane',
+];
 
 function escapeHtml(value) {
   return String(value)
@@ -33,7 +38,7 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-function buildSpotConfig(citySpots) {
+function buildSpotConfig(citySpots, provinceSpots = {}) {
   const fixed = {
     xihu: {
       spot: 'xihu',
@@ -55,6 +60,12 @@ function buildSpotConfig(citySpots) {
     },
   };
   for (const [slug, config] of Object.entries(citySpots)) {
+    fixed[slug] = {
+      ...config,
+      image: `city-${slug}.webp`,
+    };
+  }
+  for (const [slug, config] of Object.entries(provinceSpots)) {
     fixed[slug] = {
       ...config,
       image: `city-${slug}.webp`,
@@ -89,7 +100,7 @@ function serializeJsonLd(value) {
     .replaceAll('\u2029', '\\u2029');
 }
 
-function buildStructuredData(spotConfig, slug = null) {
+function buildStructuredData(spotConfig, slug = null, day = null) {
   const website = {
     '@type': 'WebSite',
     '@id': `${SITE_URL}/#website`,
@@ -101,7 +112,8 @@ function buildStructuredData(spotConfig, slug = null) {
   };
 
   if (!slug) {
-    const orderedSlugs = ['xihu', 'waitan', ...REGIONAL_ORDER];
+    const orderedSlugs = ['xihu', 'waitan', ...REGIONAL_ORDER, ...PROVINCE_ORDER]
+      .filter(spotSlug => spotConfig[spotSlug]);
     return {
       '@context': 'https://schema.org',
       '@graph': [
@@ -208,6 +220,63 @@ function buildStructuredData(spotConfig, slug = null) {
       })),
     });
   }
+  const orgId = `${SITE_URL}/#org`;
+  graph.push({
+    '@type': 'Organization',
+    '@id': orgId,
+    name: SITE_NAME,
+    url: SITE_URL,
+    alternateName: '晚霞预测',
+  });
+
+  // GEO：落地页预测数据作为机器可读 Dataset，并附 Article 权威信息（作者/发布时间）
+  let prediction = null;
+  if (day) {
+    try {
+      prediction = predictionForSpot(day, slug);
+    } catch {
+      prediction = null;
+    }
+  }
+  const hasLive = prediction && Number.isFinite(prediction.quality) && Number.isFinite(prediction.probability);
+  if (hasLive) {
+    const dataset = {
+      '@type': 'Dataset',
+      '@id': `${canonical}#forecast`,
+      name: `${config.spotName} ${day} 晚霞质量预测`,
+      description: `${config.spotName}${day} 晚霞质量分与观测成功率预测，由 Sunset Predict Quality V3 模型计算。`,
+      about: { '@id': placeId },
+      spatialCoverage: { '@type': 'Place', name: config.spotName },
+      creator: { '@id': orgId },
+      datePublished: day,
+      dateModified: day,
+      variableMeasured: [
+        { '@type': 'PropertyValue', name: '晚霞质量分', value: Math.round(prediction.quality), unitText: '分', minValue: 0, maxValue: 100 },
+        { '@type': 'PropertyValue', name: '观测成功率', value: Math.round(prediction.probability), unitText: '%', minValue: 0, maxValue: 100 },
+      ],
+    };
+    if (prediction.blueHour?.times?.start && prediction.blueHour?.times?.end) {
+      dataset.additionalProperty = {
+        '@type': 'PropertyValue',
+        name: '最佳观测窗口',
+        value: `${prediction.blueHour.times.start}–${prediction.blueHour.times.end}`,
+      };
+    }
+    graph.push(dataset);
+    graph.push({
+      '@type': 'Article',
+      '@id': `${canonical}#article`,
+      headline: `${config.spotName}${day}晚霞预测`,
+      about: { '@id': placeId },
+      author: { '@id': orgId },
+      publisher: { '@id': orgId },
+      datePublished: day,
+      dateModified: day,
+      inLanguage: 'zh-CN',
+      mainEntityOfPage: { '@id': `${canonical}#webpage` },
+    });
+  }
+
   return {
     '@context': 'https://schema.org',
     '@graph': graph,
@@ -254,9 +323,34 @@ function buildSeoHead(spotConfig, slug = null, options = {}) {
     `<meta name="twitter:image" content="${image}">`,
     verification,
     `<title>${escapeHtml(title)}</title>`,
-    `<script id="seo-structured-data" type="application/ld+json">${serializeJsonLd(buildStructuredData(spotConfig, slug))}</script>`,
+    `<script id="seo-structured-data" type="application/ld+json">${serializeJsonLd(buildStructuredData(spotConfig, slug, options.day ?? null))}</script>`,
     '<!-- SEO_HEAD_END -->',
   ].filter(Boolean).join('\n  ');
+}
+
+function getQualityLevel(score) {
+  if (!Number.isFinite(score)) return '未知';
+  if (score >= 75) return '极佳';
+  if (score >= 55) return '优良';
+  if (score >= 35) return '一般';
+  return '偏弱';
+}
+
+// GEO 直给摘要：先结论后展开，供 AI 爬虫直接引用，同时对人类可见（移动端一句话简报）
+function buildAiSummary(config, prediction) {
+  if (!prediction || !Number.isFinite(prediction.quality) || !Number.isFinite(prediction.probability)) {
+    return `${config.spotName}今日晚霞预测数据更新中，请稍后刷新查看实时质量分与观测成功率。`;
+  }
+  const quality = Math.round(prediction.quality);
+  const probability = Math.round(prediction.probability);
+  const blueHour = prediction.blueHour?.times;
+  const windowText = blueHour && blueHour.start
+    ? `${blueHour.start} 蓝调前后`
+    : '日落前后';
+  const advice = prediction.blueHour?.advice
+    ? ` 摄影建议：${String(prediction.blueHour.advice).replace(/\s+/g, '')}`
+    : '';
+  return `${config.spotName}今日晚霞预测：质量分 ${quality}（${getQualityLevel(quality)}），观测成功率 ${probability}%。最佳观测窗口为 ${windowText} 约 20 分钟。${advice}`;
 }
 
 function renderSpotLanding(spotConfig, slug, day, photos = []) {
@@ -268,6 +362,7 @@ function renderSpotLanding(spotConfig, slug, day, photos = []) {
   const liveSummary = hasLive
     ? `今日模型质量 ${Math.round(prediction.quality)} 分，观测成功率 ${Math.round(prediction.probability)}%。`
     : '今日质量分与观测成功率正在更新。';
+  const aiSummary = buildAiSummary(config, prediction);
 
   // 今日晚霞概率醒目块：直接回答"XX今日晚霞概率"搜索意图
   const todayHtml = `
@@ -351,15 +446,21 @@ function renderSpotLanding(spotConfig, slug, day, photos = []) {
       </nav>`
     : '';
 
+  const aiSummaryHtml = `
+      <div id="ai-summary" class="spot-landing__ai-summary" aria-label="${escapeHtml(config.spotName)}晚霞预报直给摘要">
+        <p>${escapeHtml(aiSummary)}</p>
+      </div>`;
+
   return `
     <section class="spot-landing glass-panel" aria-labelledby="spot-landing-title">
       <span class="spot-landing__eyebrow">Local sunset forecast</span>
       <h2 id="spot-landing-title">${escapeHtml(config.spotName)}晚霞预测与摄影指南</h2>
       <p>${escapeHtml(spotDescription(config))}</p>
+      ${aiSummaryHtml}
       ${todayHtml}
       ${topSpotsHtml}
       ${photoWallHtml}
-      <a href="/">查看全国 19 个晚霞摄影站</a>
+      <a href="/">查看全国 37 个晚霞摄影站</a>
       ${guideHtml}
       ${relatedHtml}
     </section>`;
@@ -401,26 +502,65 @@ function renderRegionalFallbackCards(citySpots) {
   }).join('');
 }
 
-function injectSeoDocument(html, { citySpots, slug = null, day = null, photos = [], ...options }) {
-  const spotConfig = buildSpotConfig(citySpots);
+function renderProvinceFallbackCards(provinceSpots) {
+  return PROVINCE_ORDER.filter(slug => provinceSpots[slug]).map(slug => {
+    const spot = provinceSpots[slug];
+    return `
+        <a
+          class="city-card city-card--${slug}"
+          id="city-${slug}"
+          data-spot="${slug}"
+          href="${spotPath(slug)}"
+          aria-expanded="false"
+          aria-controls="detail-panel"
+          aria-label="${escapeHtml(spot.spotName)}晚霞预测，点击展开摄影指南"
+        >
+          <img class="city-card__image" src="/assets/city-${slug}.webp?v=20260810-province-live-v12" alt="${escapeHtml(spot.spotName)}标志性晚霞摄影景观" loading="lazy" decoding="async">
+          <div class="city-card__content">
+            <div class="city-card__top">
+              <p class="city-card__city">${escapeHtml(spot.location)}</p>
+              <h3 class="city-card__name">${escapeHtml(spot.spotName)}</h3>
+              <span class="city-card__weather weather-badge unknown">天气更新中</span>
+              <span class="city-card__chance probability-pill"><i data-lucide="shield" aria-hidden="true"></i><span>几率：--</span></span>
+            </div>
+            <div class="city-card__prediction">
+              <div class="city-card__score-row"><span class="city-card__score">--</span><span class="city-card__unit">/ 100</span></div>
+              <div class="city-card__grade">连接实时模型</div>
+              <div class="city-card__blue-hour" hidden><i data-lucide="moon-star" aria-hidden="true"></i><span>蓝调 --:--–--:--</span></div>
+              <div class="city-card__progress"><span></span></div>
+            </div>
+            <div class="city-card__footer">
+              <span class="city-card__spot"><i data-lucide="map-pin" aria-hidden="true"></i>${escapeHtml(spot.hook)}</span>
+              <span class="city-card__status">试运行</span>
+            </div>
+          </div>
+        </a>`;
+  }).join('');
+}
+
+function injectSeoDocument(html, { citySpots, provinceSpots = {}, slug = null, day = null, photos = [], ...options }) {
+  const spotConfig = buildSpotConfig(citySpots, provinceSpots);
   return html
-    .replace(/<!-- SEO_HEAD_START -->[\s\S]*?<!-- SEO_HEAD_END -->/, buildSeoHead(spotConfig, slug, options))
+    .replace(/<!-- SEO_HEAD_START -->[\s\S]*?<!-- SEO_HEAD_END -->/, buildSeoHead(spotConfig, slug, { ...options, day }))
     .replace('<!-- SPOT_LANDING -->', renderSpotLanding(spotConfig, slug, day, photos))
     .replace(
       '<div class="city-grid" id="regional-grid" aria-live="polite"></div>',
       `<div class="city-grid" id="regional-grid" aria-live="polite">${renderRegionalFallbackCards(citySpots)}\n      </div>`,
-    );
+    )
+    .replace('<!-- PROVINCE_GRID -->', renderProvinceFallbackCards(provinceSpots));
 }
 
 module.exports = {
   HOME_DESCRIPTION,
   HOME_TITLE,
+  PROVINCE_ORDER,
   REGIONAL_ORDER,
   SITE_URL,
   buildSeoHead,
   buildSpotConfig,
   buildStructuredData,
   injectSeoDocument,
+  renderProvinceFallbackCards,
   renderRegionalFallbackCards,
   renderSpotLanding,
   spotPath,

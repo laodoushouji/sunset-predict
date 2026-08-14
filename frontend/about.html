@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070b14">
+  <meta name="robots" content="index, follow">
+  <meta name="description" content="Sunset Predict 晚霞预测的方法论：Quality V3 双维度模型（光学厚度 vs 视觉通光率）、火烧云/蓝调时刻/瑞利散射术语表，以及数据引用授权说明。">
+  <link rel="canonical" href="https://sunsetpredict.cloud/about">
+  <title>方法论与数据说明 · Sunset Predict</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    body { margin: 0; background: #070b14; color: rgba(255, 255, 255, 0.78); }
+    main { width: min(820px, calc(100% - 40px)); margin: 0 auto; padding: 56px 0 72px; }
+    h1 { color: #fff; font-size: 1.7rem; font-weight: 600; margin-bottom: 6px; }
+    h2 { color: #fff; font-weight: 600; font-size: 1.2rem; margin-top: 44px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.1); }
+    p, li { line-height: 1.85; }
+    a { color: #d5a98f; }
+    .back { display: inline-block; margin-bottom: 24px; text-decoration: none; color: rgba(255,255,255,0.6); }
+    .lead { color: rgba(255,255,255,0.6); margin-top: 0; }
+    dl { margin: 0; }
+    dt { color: #fff; font-weight: 600; margin-top: 18px; }
+    dd { margin: 6px 0 0; color: rgba(255,255,255,0.7); }
+    .tag { display: inline-block; padding: 2px 10px; border: 1px solid rgba(213,169,143,0.4); border-radius: 999px; color: #d5a98f; font-size: 0.8rem; margin-right: 6px; }
+    .cite-box { margin-top: 28px; padding: 18px 20px; border: 1px solid rgba(213,169,143,0.35); border-radius: 14px; background: rgba(213,169,143,0.06); }
+    .cite-box a { color: #d5a98f; }
+    .credits__sep { border: none; border-top: 1px solid rgba(255,255,255,0.12); margin: 40px 0 24px; }
+    .credits__cite { color: rgba(255,255,255,0.6); font-size: 0.95rem; }
+    .credits__cite a { color: #d5a98f; }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back" href="/">← 返回首页</a>
+    <h1>方法论与数据说明</h1>
+    <p class="lead">Sunset Predict 如何把"今天会不会有晚霞"变成一个可被引用、可被验证的预测。本文定义核心概念、说明 Quality V3 模型，并给出数据引用授权。</p>
+
+    <h2>什么是晚霞预测</h2>
+    <p><strong>晚霞预测</strong>是指基于实时气象格点数据，对特定地点在日落前后出现可观晚霞（火烧云）的概率与质量进行量化估计。Sunset Predict 对全国 37 个摄影站点每日给出：晚霞<strong>质量分（0–100）</strong>、<strong>观测成功率（0–100%）</strong>，以及<strong>最佳观测窗口</strong>（日落与蓝调时刻前后约 20 分钟）。预测每日每小时更新，反映大气透明度、云量与能见度的实时变化。</p>
+
+    <h2>Quality V3 双维度模型</h2>
+    <p>晚霞能否"好看"，取决于两层因素，二者需要分别建模再综合：</p>
+    <dl>
+      <dt><span class="tag">维度一</span>光学厚度（大气透明度）</dt>
+      <dd>衡量高空云系（高云、卷层云、中层云）对光线的遮挡。光学厚度越低，落日余晖越能穿透并被散射；中雨或厚云会直接触发熔断，当日报废清零。模型重点参考 250hPa 高空湿度与中高云量。</dd>
+      <dt><span class="tag">维度二</span>视觉通光率</dt>
+      <dd>衡量到达人眼与镜头的可见光比例，受气溶胶、低空湿度与能见度影响。即便天空无云，若近地雾霾重、通光率低，晚霞也会发灰发闷。瑞利散射强度与通光率共同决定色彩饱和度。</dd>
+    </dl>
+    <p>Quality V3 将两维度加权融合为 0–100 的质量分，并叠加"观测成功率"概率输出。质量分分级：≥75 极佳、≥55 优良、≥35 一般、&lt;35 偏弱。中雨等极端天气触发熔断，质量分与成功率清零。</p>
+
+    <h2>术语表</h2>
+    <dl>
+      <dt>火烧云</dt>
+      <dd>日落前后天空中密集的高积云或卷层云被染成红橙色的现象，是晚霞摄影最理想的目标。其红色来自阳光中长波（红光）穿透厚大气层、短波被散射后的剩余光。</dd>
+      <dt>蓝调时刻（Blue Hour）</dt>
+      <dd>日出前或日落后，太阳位于地平线以下约 −4° 至 −8° 的短暂窗口。此时天空呈饱和的深蓝色，与城市灯光、水面反光形成高对比，是风光摄影的黄金时段。Sunset Predict 的最佳观测窗口通常落在日落与蓝调时刻前后约 20 分钟。</dd>
+      <dt>瑞利散射（Rayleigh Scattering）</dt>
+      <dd>光在大气分子上的弹性散射，波长越短散射越强（蓝紫光优先）。日出日落时阳光斜穿更厚的大气，蓝紫光被大量散射掉，剩下红橙长波直达人眼，于是天空"变红"。这是晚霞色彩的底层物理机制。</dd>
+    </dl>
+
+    <h2>数据来源与更新</h2>
+    <p>气象输入来自 Open-Meteo 与和风天气的公开格点数据；太阳几何（日落时间、太阳高度角）由 SunCalc 计算；预测模型每小时重算并缓存。历史实拍照片来自用户社区反馈（SQLite 存储的原创 UGC）。所有预测均为概率性参考，实际观测受局地地形与突发天气影响。</p>
+
+    <h2>引用授权声明</h2>
+    <div class="cite-box">
+      <p>欢迎在<strong>注明出处</strong>的前提下引用 Sunset Predict 的晚霞预测数据与摄影指南。建议引用格式：</p>
+      <p><em>数据来源：Sunset Predict（sunsetpredict.cloud），Quality V3 晚霞预测模型。</em></p>
+      <p>如需批量或商业引用，请通过站点页脚渠道联系。引用时请勿篡改原始质量分与成功率数值。</p>
+    </div>
+
+    <hr class="credits__sep">
+    <p class="credits__cite">图片版权详见 <a href="/credits">图片来源</a>。</p>
+  </main>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "@id": "https://sunsetpredict.cloud/about#webpage",
+        "url": "https://sunsetpredict.cloud/about",
+        "name": "方法论与数据说明 · Sunset Predict",
+        "description": "Sunset Predict 晚霞预测的方法论：Quality V3 双维度模型、火烧云/蓝调时刻/瑞利散射术语表与数据引用授权。",
+        "isPartOf": { "@id": "https://sunsetpredict.cloud/#website" },
+        "inLanguage": "zh-CN"
+      },
+      {
+        "@type": "Article",
+        "headline": "Sunset Predict 晚霞预测方法论与术语表",
+        "about": { "@type": "Thing", "name": "晚霞预测方法论" },
+        "author": { "@id": "https://sunsetpredict.cloud/#org" },
+        "publisher": { "@id": "https://sunsetpredict.cloud/#org" },
+        "datePublished": "2026-08-14",
+        "dateModified": "2026-08-14",
+        "inLanguage": "zh-CN",
+        "mainEntityOfPage": { "@id": "https://sunsetpredict.cloud/about#webpage" }
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://sunsetpredict.cloud/#org",
+        "name": "Sunset Predict",
+        "url": "https://sunsetpredict.cloud",
+        "alternateName": "晚霞预测"
+      }
+    ]
+  }
+  </script>
+</body>
+</html>

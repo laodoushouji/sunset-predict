@@ -79,7 +79,7 @@ node --test worker/tests/*.test.js
 
 ## 生产部署
 
-生产发布使用 `deploy/remote-deploy.sh`。脚本会备份当前发布目录、Nginx 和 systemd 配置，运行语法检查与测试，重启服务并验证首页、API、图片、二维码及 HTTPS；任一步失败会自动回滚。
+香港生产发布使用 `deploy/remote-deploy.sh`。国内节点使用 `deploy/remote-deploy-domestic.sh` 与独立的 `deploy/glowsunset.conf`；证书文件固定放在 `/etc/nginx/ssl/glowsunset/`，发布脚本会同时验证 HTTP 跳转、HTTPS、API 与图片。两套脚本都会备份当前发布目录、Nginx 和 systemd 配置，运行语法检查与测试；任一步失败会自动回滚。
 
 部署前必须确认：
 
