@@ -1,9 +1,9 @@
 # Sunset Predict 项目进展与需求变更总览
 
-> 更新时间：2026-07-27 CST
+> 更新时间：2026-08-14 CST
 > 生产环境：[https://sunsetpredict.cloud/](https://sunsetpredict.cloud/)
-> 当前阶段：多站点 MVP / 公开试运行
-> 最近部署：`20260717T093234Z`（本地已新增 SQLite 反馈存储 + sharp 图像压缩 + `/api/feedback/stats`，尚未重新部署上线）
+> 当前阶段：多站点 MVP / 公开试运行 + GEO（生成式引擎优化）基础落地
+> 最近部署：`20260814T012845Z`（GEO P1：llms.txt + /about 方法论页 + JSON-LD 扩展 + 全站页脚引用声明 + 城市/省份 37 个落地页 + 自托管字体，已上线）
 
 ## 1. 项目结论
 
@@ -33,7 +33,8 @@ Sunset Predict 已经从“西湖单站双卡片原型”发展为一个包含 1
 | 微信赞赏 | 已完成 | 页面底部只保留微信赞赏 |
 | 商业合作位 | 部分完成 | 前端卡片与二维码已完成，暂无广告后台或投放配置服务 |
 | SEO 基础 | 已完成 | Meta、语义化 HTML、robots.txt、sitemap.xml 已上线 |
-| SEO 内容扩展 | 未完成 | 目前 Sitemap 只有首页和版权页，没有城市独立落地页 |
+| SEO 内容扩展 | 已完成 | 19 城 + 18 省共 37 个 `/spots/*` 落地页已上线，sitemap.xml 扩至 38 条 `<loc>`，含原创摄影指南与直给摘要 |
+| GEO / AIO 基础 | 已完成 | llms.txt、/about 方法论页、落地页 Dataset/Article JSON-LD、全站页脚引用授权声明已上线 |
 | 运维部署 | 已完成 | 阿里云香港服务器、Nginx、systemd、HTTPS、自动备份与回滚 |
 | 源码版本管理 | 已完成 | 已建立 40 个受管文件的首个基线，并单独提交 V3 变更 |
 | 项目文档一致性 | 已完成 | README 已更新为阿里云 Nginx + Node + Open-Meteo 实际架构 |
@@ -198,14 +199,17 @@ Sunset Predict 已经从“西湖单站双卡片原型”发展为一个包含 1
 - 所有静态和动态图片均有描述性 `alt`。
 - Lucide 装饰图标使用 `aria-hidden`，功能按钮使用 `aria-label`。
 - `/robots.txt` 已上线。
-- `/sitemap.xml` 已上线，目前收录首页与 `/credits`。
+- `/sitemap.xml` 已上线，扩至 38 条 `<loc>`（首页 + `/credits` + 37 个 `/spots/*` 落地页）。
+- `llms.txt` 已上线（`/llms.txt`，面向 AI 爬虫的站点地图）。
+- `/about` 方法论页已上线（定义“晚霞预测”、Quality V3 双维度、术语表、引用授权）。
+- 落地页 JSON-LD 已扩展 `Dataset`（晚霞质量分/观测成功率/最佳观测窗口）+ `Article`（author/datePublished/dateModified）+ `Organization`。
+- 全站页脚「欢迎在注明出处前提下引用预测数据」声明已上线，链接 `/about`。
+- 19 个城市 + 18 个省份独立落地页已完成（共 37 个 `/spots/*` URL），含直给摘要与原创摄影指南。
 
-尚未完成：
+尚未完成（依赖用户平台操作，非代码）：
 
-- 尚未提交 Google Search Console。
-- 尚未提交百度搜索资源平台。
-- 19 个站点没有各自独立、可索引的 HTML URL；`#!xihu` 等 Hash 不会形成独立搜索页面。
-- Sitemap 目前只有 2 个 URL，无法覆盖“西湖晚霞预测、外滩日落、黄山云海”等长尾搜索词。
+- 尚未在 GSC 配置 `GOOGLE_SITE_VERIFICATION` / 百度 `BAIDU_SITE_VERIFICATION` meta（静态托管的 `google644a617b7e117520.html` 验证文件已通过，但页面 meta 仍需 env 注入）。
+- 尚未在 Google / Bing / 百度主动提交 `sitemap.xml`；验证文件已 OK，但收录面仍小，长尾覆盖能力就绪待平台提交后扩大。
 
 ### 4.11 部署与运维
 
@@ -241,6 +245,10 @@ Sunset Predict 已经从“西湖单站双卡片原型”发展为一个包含 1
 | `/robots.txt` | 爬虫策略 |
 | `/sitemap.xml` | 搜索引擎站点地图 |
 | `/health` | 后端健康检查 |
+| `/spots/:slug` | 城市/省份 SEO 落地页（37 个，如 `/spots/wuhan`、`/spots/xihu`） |
+| `/about` | 方法论与数据说明 |
+| `/llms.txt` | 面向 AI 爬虫的站点地图 |
+| `/api/geo-stats` | GEO 爬虫统计（只读，基于独立 nginx 访问日志） |
 
 未实现的早期规划接口：
 
@@ -253,7 +261,7 @@ Sunset Predict 已经从“西湖单站双卡片原型”发展为一个包含 1
 
 | 验收项 | 结果 |
 |---|---|
-| 自动化测试 | 93 / 93 通过 |
+| 自动化测试 | 109 / 109 通过 |
 | 首页 | HTTP 200 |
 | 西湖 API | HTTP 200 |
 | 外滩 API | HTTP 200 |
@@ -266,7 +274,7 @@ Sunset Predict 已经从“西湖单站双卡片原型”发展为一个包含 1
 | sitemap.xml | HTTP 200，有效 XML |
 | 历史快照 | 1 天 |
 | 实况反馈 | SQLite 存储闭环已上线（`/api/feedback/stats` 可聚合），等待日落后的真实样本 |
-| Git 提交 | 3；基线 `46b6553`，V3 `cc02acc`，另有进展文档提交（本地未推送） |
+| Git 提交 | 已推送至 GitHub `main`（`laodoushouji/sunset-predict`，最新 `71f5027`） |
 | Git 受管文件 | 40 基线 + 后续增量（SQLite、sharp、SEO 落地页等已纳入） |
 | 手机端浏览器验证 | 390×844 下核心卡片等宽等高，10 站天气角标可见，详情天气正常 |
 
@@ -292,14 +300,14 @@ Sunset Predict 已经从“西湖单站双卡片原型”发展为一个包含 1
 2. **补齐台风路径数据**
    厦门、深圳的台风外围奖金目前只有算法入口，没有真实数据源。
 
-3. **修复 Git 远端**
-   本地 Git 基线已经建立，但当前配置的 GitHub 仓库地址返回 Repository not found，尚不能异地备份或推送。
+3. **修复 Git 远端** ✅ 已完成
+   2026-08-14 已将全部本地提交推送至 GitHub `main`（`laodoushouji/sunset-predict`），形成异地源码备份。
 
-4. **建立城市独立 SEO 页面**
-   为 19 个站点生成 `/spots/xihu`、`/spots/waitan` 等可索引页面，并扩展 Sitemap。
+4. **建立城市独立 SEO 页面** ✅ 已完成
+   19 个城市 + 18 个省份共 37 个 `/spots/*` 可索引落地页已上线，Sitemap 扩至 38 条 `<loc>`，含直给摘要与原创摄影指南。
 
-5. **提交搜索平台**
-   robots.txt 和 Sitemap 只是基础条件，不等于已经被 Google 或百度收录。
+5. **提交搜索平台** ⏳ 仍待办
+   robots.txt 和 Sitemap 只是基础条件，不等于已经被 Google 或百度收录；GSC/Bing/百度主动提交 sitemap 仍未做（需用户登录账号操作）。
 
 ### P2：产品化增强
 
@@ -315,9 +323,9 @@ Sunset Predict 已经从“西湖单站双卡片原型”发展为一个包含 1
 
 1. 连续累计历史快照与用户实况反馈，先达到每站至少 30 个有效样本。
 2. 建立按站点、月份和天气类型统计的离线校准报告，不直接用少量样本修改线上分数。
-3. 修复 GitHub 远端并推送当前两个本地提交，形成异地源码备份。
+3. ~~修复 GitHub 远端并推送~~ ✅ 已于 2026-08-14 完成（推送至 `main`）。
 4. 接入厦门、深圳台风路径和下沉气流可信数据源。
-5. 建立 19 个独立站点页面，扩展 Sitemap 后提交 Google 与百度。
+5. 在 Google / Bing / 百度主动提交 `sitemap.xml`，扩大收录面（需用户登录平台操作）。
 
 ## 10. 下一次验收标准
 
@@ -326,8 +334,8 @@ Sunset Predict 已经从“西湖单站双卡片原型”发展为一个包含 1
 - 所有站点在强降雨时评分与成功率均为 0。
 - 每个站点累计至少 30 条有效实况反馈，并可与提交时的 V3 预测快照一一对应。
 - 形成 Probability 命中率、Quality 平均绝对误差和各等级分布报告。
-- GitHub 远端恢复可用，两个本地提交完成异地推送。
-- 19 个站点拥有独立可索引 URL，并进入 Sitemap。
+- GitHub 远端恢复可用，本地提交完成异地推送 ✅（2026-08-14 完成）。
+- 19 个站点（及 18 省份）拥有独立可索引 URL，并进入 Sitemap ✅（37 个 `/spots/*` + 38 条 `<loc>`）。
 
 ---
 

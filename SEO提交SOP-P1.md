@@ -60,7 +60,7 @@ systemd service 的 `EnvironmentFile` 在下次启动时加载进 node 进程。
 
 ### 3.1 Google
 - GSC 左侧 **站点地图** → 添加 `https://sunsetpredict.cloud/sitemap.xml` → 提交
-- 状态变为「成功」即代表 Google 已读取 20 条 URL
+- 状态变为「成功」即代表 Google 已读取 38 条 URL
 
 ### 3.2 Bing
 - 打开：https://www.bing.com/webmasters

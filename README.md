@@ -1,6 +1,6 @@
 # Sunset Predict
 
-面向晚霞摄影的多站点预测网站。当前覆盖杭州西湖、上海外滩、北京景山、大理洱海、重庆、厦门、青岛、成都、深圳和黄山，分别输出晚霞质量分与观测成功率。
+面向晚霞摄影的多站点预测网站。当前覆盖杭州西湖、上海外滩、北京景山、大理洱海、重庆、厦门、青岛、成都、深圳、黄山等 19 个摄影站点的实时预测，并提供 19 个城市 + 18 个省份共 37 个 SEO 落地页（`/spots/*`）与原创摄影指南，分别输出晚霞质量分与观测成功率。
 
 生产地址：[https://sunsetpredict.cloud/](https://sunsetpredict.cloud/)
 
@@ -12,6 +12,8 @@
 - 附近站点：本地离线 GeoIP 数据仅在请求时解析城市级坐标，不把原始 IP 写入业务数据或接口响应。
 - 摄影时间：SunCalc 2.0.1 按太阳高度 -4° 至 -8° 计算西湖与外滩蓝调窗口，并输出蓝调质量与相机参数。
 - 部署：阿里云香港服务器，Nginx、systemd、HTTPS。
+- GEO / AIO：提供 `llms.txt` 站点地图、`/about` 方法论页、落地页 `Dataset`/`Article` JSON-LD 与全站页脚引用授权声明，提升生成式引擎引用率。
+- 字体：Noto Sans/Serif SC 自托管（woff2），避免 Google Fonts 国内首屏不稳定。
 - 持久化：历史快照位于 `/var/lib/sunset-predict/history`，匿名实况反馈位于 `/var/lib/sunset-predict/feedback`，全国站最近成功快照位于 `/var/lib/sunset-predict/cache`。
 
 ## 本地开发
@@ -61,6 +63,10 @@ node --test worker/tests/*.test.js
 | `POST /api/feedback` | 匿名发布站点照片或评论（照片经 sharp 压缩为 WebP） |
 | `GET /api/feedback/photo/:date/:file` | 读取留言照片 |
 | `GET /health` | 服务健康检查 |
+| `GET /spots/:slug` | 城市/省份 SEO 落地页（共 37 个，如 `/spots/wuhan`、`/spots/xihu`），含直给摘要、摄影指南与 JSON-LD |
+| `GET /about` | 方法论与数据说明（定义、Quality V3 双维度、术语表、引用授权） |
+| `GET /llms.txt` | 面向 AI 爬虫的站点地图（Markdown） |
+| `GET /api/geo-stats` | GEO 爬虫统计（只读，基于独立 nginx 访问日志） |
 
 ## 环境变量
 
@@ -97,7 +103,7 @@ node --test worker/tests/*.test.js
 | 微信赞赏 | 已完成 | 文案为"为浪漫续航"，只保留微信，置于页面 `<footer>` 最下方 |
 | 商业合作位 | 部分完成 | 合作二维码（`business.jpg`）与卡片已上线，合作方向：咖啡、住宿、器材租赁、摄影服务 |
 | 广告后台 | 未完成 | 前端有 `advertiserData` 占位逻辑，但无后台管理、定向投放或数据统计 |
-| AdSense / 展示广告 | 未启动 | 需先补齐 `/privacy`、`/about`、`/contact` 三页并绑定 Search Console 提交 sitemap |
+| AdSense / 展示广告 | 未启动 | 需先补齐 `/privacy`、`/contact` 两页（`/about` 已于 2026-08-14 上线）并绑定 Search Console 提交 sitemap |
 
 收入路径：
 
